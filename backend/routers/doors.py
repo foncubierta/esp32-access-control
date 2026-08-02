@@ -73,6 +73,22 @@ def rotate_key(door_id: int, session: Session = Depends(get_session)):
     return door
 
 
+@router.post("/{door_id}/trigger", response_model=Door)
+def trigger_door(door_id: int, session: Session = Depends(get_session)):
+    """Guard-initiated one-off relay pulse, independent of mode/credentials.
+    Bumps a counter the node picks up on its next mode poll (a few seconds
+    later) and fires once — there's no direct connection to the node to
+    push this immediately, it's a pull architecture end to end."""
+    door = session.get(Door, door_id)
+    if not door:
+        raise HTTPException(status_code=404, detail="Door not found")
+    door.trigger_seq += 1
+    session.add(door)
+    session.commit()
+    session.refresh(door)
+    return door
+
+
 @router.delete("/{door_id}")
 def delete_door(door_id: int, session: Session = Depends(get_session)):
     door = session.get(Door, door_id)

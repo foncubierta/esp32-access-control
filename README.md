@@ -43,7 +43,9 @@ Cada `Door` tiene un `mode` que un vigilante puede cambiar en caliente desde la 
 | `closed` | Nunca dispara el relé, aunque la credencial tenga permiso |
 | `identify` | Identifica a la persona (aparece en la web) pero nunca dispara el relé |
 
-El nodo separa la **decisión de acceso** (¿tendría paso esta credencial?) de la **acción física** (¿se dispara el relé?) — así el log siempre registra la verdad sobre la credencial, y el modo se aplica como filtro final antes de tocar el relé. El nodo consulta el modo por un endpoint ligero (`/api/node/mode`) cada pocos segundos, separado del sync completo de credenciales, para que el cambio de modo se note casi al instante sin recargar toda la lista de credenciales en cada poll.
+El nodo separa la **decisión de acceso** (¿tendría paso esta credencial?) de la **acción física** (¿se dispara el relé?) — así el log siempre registra la verdad sobre la credencial, y el modo se aplica como filtro final antes de tocar el relé. El nodo consulta el modo por un endpoint ligero (`/api/node/mode`) cada 2s, separado del sync completo de credenciales, para que el cambio de modo se note casi al instante sin recargar toda la lista de credenciales en cada poll.
+
+Esa misma página tiene un botón **"Abrir ahora"** independiente de los modos: dispara el relé una vez, en el momento, sin pasar tarjeta (`POST /api/doors/:id/trigger`). El nodo lo detecta por el mismo poll de `/api/node/mode` (campo `trigger_seq`, que sube en cada clic) y lo registra en el log con `reason=manual_trigger`.
 
 ## Correr en local (desarrollo)
 

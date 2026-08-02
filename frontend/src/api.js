@@ -62,6 +62,7 @@ export const api = {
     create: (body) => req("/doors", { method: "POST", body: JSON.stringify(body) }),
     update: (id, body) => req(`/doors/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
     rotateKey: (id) => req(`/doors/${id}/rotate-key`, { method: "POST" }),
+    trigger: (id) => req(`/doors/${id}/trigger`, { method: "POST" }),
     delete: (id) => req(`/doors/${id}`, { method: "DELETE" }),
   },
   permissions: {

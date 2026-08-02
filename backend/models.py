@@ -45,6 +45,7 @@ class Door(SQLModel, table=True):
     api_key: str = Field(index=True, unique=True)
     active: bool = Field(default=True)
     mode: str = Field(default="auto")  # auto | open | closed | identify — set from the guard view
+    trigger_seq: int = Field(default=0)  # bumped on each manual "open now" from the guard view
     last_seen: Optional[datetime] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 

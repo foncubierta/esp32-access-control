@@ -81,6 +81,7 @@ bool BackendApi::sync() {
   Access.replaceCache(buffer, count);
   Access.setDoorActive(doorActive);
   Access.setMode(String(doorMode));
+  Access.setTriggerSeq(doc["trigger_seq"] | 0);
   Serial.printf("[api] sync OK — %u credential(s) cached, door_active=%d, mode=%s\n", (unsigned)count, doorActive,
                 doorMode);
   return true;
@@ -101,6 +102,7 @@ bool BackendApi::syncMode() {
 
   Access.setDoorActive(doc["door_active"] | true);
   Access.setMode(String((const char *)(doc["door_mode"] | "auto")));
+  Access.setTriggerSeq(doc["trigger_seq"] | 0);
   return true;
 }
 

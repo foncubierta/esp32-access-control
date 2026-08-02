@@ -114,6 +114,25 @@ Si el nodo no tiene configuración guardada (o mantienes el botón de config
 Para reconfigurar un nodo ya desplegado (cambiar de WiFi, mover a otra
 puerta, etc.), mantén pulsado el botón de config 3 segundos al arrancar.
 
+## Modos de puerta y disparo manual
+
+El nodo consulta `GET /api/node/mode` cada 2s (más frecuente que el sync
+completo de credenciales) para enterarse rápido de dos cosas que cambia el
+vigilante desde la web:
+
+- **Modo** (`auto`/`open`/`closed`/`identify`): se aplica como filtro final
+  justo antes de `Relay.pulse()` — la evaluación de la credencial (¿tendría
+  paso?) siempre se calcula igual y se sube al log tal cual, sea cual sea el
+  modo.
+- **Disparo manual** ("Abrir ahora" en la web): el backend lleva un
+  contador (`trigger_seq`) que sube en cada clic; el nodo recuerda el último
+  valor que ya atendió y, en cuanto ve que cambió, dispara un pulso una sola
+  vez (respeta que la puerta esté activa, pero no el modo — es una
+  anulación explícita del vigilante) y sube un log con
+  `reason=manual_trigger`. Al arrancar, el nodo solo fija el valor de
+  partida sin disparar, para no repetir un clic que hubiera quedado
+  pendiente de una desconexión anterior.
+
 ## Horarios y validez
 
 El nodo sincroniza hora por NTP usando la TZ configurada (string POSIX,

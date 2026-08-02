@@ -43,6 +43,13 @@ class AccessController {
   void setMode(const String &mode) { _mode = mode; }
   String mode() const { return _mode; }
 
+  // Bumped server-side on every guard "open now" click. main.cpp compares
+  // this against the last value it acted on and fires a single pulse
+  // whenever it changes — see checkManualTrigger() there for the full
+  // baseline-on-first-read reasoning.
+  void setTriggerSeq(int32_t seq) { _triggerSeq = seq; }
+  int32_t triggerSeq() const { return _triggerSeq; }
+
   AccessDecision evaluate(const String &valueHash) const;
 
  private:
@@ -50,6 +57,7 @@ class AccessController {
   size_t _count = 0;
   bool _doorActive = true;
   String _mode = "auto";
+  int32_t _triggerSeq = 0;
 };
 
 extern AccessController Access;

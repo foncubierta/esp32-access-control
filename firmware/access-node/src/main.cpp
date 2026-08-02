@@ -15,7 +15,7 @@ uint32_t lastSyncMs = 0;
 uint32_t lastModePollMs = 0;
 uint32_t lastLogFlushMs = 0;
 uint32_t lastHeartbeatMs = 0;
-constexpr uint32_t MODE_POLL_INTERVAL_MS = 5000;
+constexpr uint32_t MODE_POLL_INTERVAL_MS = 2000;
 constexpr uint32_t LOG_FLUSH_INTERVAL_MS = 15000;
 constexpr uint32_t HEARTBEAT_INTERVAL_MS = 60000;
 
@@ -83,6 +83,40 @@ void handleCardScan() {
     BackendApi::uploadLogs();
   }
 }
+
+// Fires a single pulse whenever the guard clicks "abrir ahora" — detected
+// as Access.triggerSeq() (refreshed by the mode/sync polls) changing since
+// the last value we acted on. The very first read after boot only sets the
+// baseline instead of firing, so a node coming back online doesn't replay
+// whatever trigger happened while it was offline.
+void checkManualTrigger() {
+  static int32_t lastAcked = -1;
+  int32_t seq = Access.triggerSeq();
+  if (lastAcked == -1) {
+    lastAcked = seq;
+    return;
+  }
+  if (seq == lastAcked) return;
+  lastAcked = seq;
+
+  bool doorActive = Access.doorActive();
+  Serial.printf("[trigger] manual open requested from the guard view -> %s\n", doorActive ? "FIRED" : "ignored (door inactive)");
+  if (doorActive) {
+    Relay.pulse(Network.config().relayPulseMs);
+  }
+
+  LogEvent ev;
+  ev.credentialId = -1;
+  ev.result = doorActive ? "granted" : "denied";
+  ev.reason = "manual_trigger";
+  ev.doorMode = Access.mode();
+  ev.eventTimeIso = nowIso8601();
+  PendingLogs.push(ev);
+
+  if (Network.isConnected()) {
+    BackendApi::uploadLogs();
+  }
+}
 }  // namespace
 
 void setup() {
@@ -141,4 +175,6 @@ void loop() {
   if (Wiegand.available()) {
     handleCardScan();
   }
+
+  checkManualTrigger();
 }

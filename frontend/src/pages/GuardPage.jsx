@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import { DoorOpen, DoorClosed, ScanEye, Zap } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { DoorOpen, DoorClosed, ScanEye, Zap, Unlock } from "lucide-react";
 import { api } from "../api.js";
 
 const MODES = [
@@ -23,6 +23,9 @@ export default function GuardPage() {
   const [credentials, setCredentials] = useState([]);
   const [events, setEvents] = useState([]);
   const [changingMode, setChangingMode] = useState(false);
+  const [triggering, setTriggering] = useState(false);
+  const [triggerSent, setTriggerSent] = useState(false);
+  const triggerTimeoutRef = useRef(null);
 
   useEffect(() => {
     api.doors.list().then((ds) => {
@@ -41,6 +44,8 @@ export default function GuardPage() {
     const t = setInterval(() => api.doors.list().then(setDoors), DOOR_REFRESH_MS);
     return () => clearInterval(t);
   }, []);
+
+  useEffect(() => () => clearTimeout(triggerTimeoutRef.current), []);
 
   const door = doors.find((d) => String(d.id) === String(doorId));
 
@@ -66,6 +71,31 @@ export default function GuardPage() {
     }
   }
 
+  async function triggerDoor() {
+    if (!door || triggering) return;
+    setTriggering(true);
+    try {
+      await api.doors.trigger(door.id);
+      setTriggerSent(true);
+      clearTimeout(triggerTimeoutRef.current);
+      triggerTimeoutRef.current = setTimeout(() => setTriggerSent(false), 3000);
+      loadEvents();
+    } finally {
+      setTriggering(false);
+    }
+  }
+
+  function personLabel(ev) {
+    if (ev.reason === "manual_trigger") return "Abierto por el vigilante";
+    return credentialInfo(ev.credential_id)?.userName || "Tarjeta desconocida";
+  }
+
+  function wasOpened(ev) {
+    if (!ev) return false;
+    if (ev.reason === "manual_trigger") return ev.result === "granted";
+    return ev.door_mode === "open" || (ev.door_mode === "auto" && ev.result === "granted");
+  }
+
   function credentialInfo(credentialId) {
     if (credentialId == null) return null;
     const c = credentials.find((c) => c.id === credentialId);
@@ -79,8 +109,7 @@ export default function GuardPage() {
   }
 
   const latest = events[0];
-  const latestInfo = latest ? credentialInfo(latest.credential_id) : null;
-  const latestOpened = latest && (latest.door_mode === "open" || (latest.door_mode === "auto" && latest.result === "granted"));
+  const latestOpened = wasOpened(latest);
 
   return (
     <div className="page">
@@ -121,17 +150,26 @@ export default function GuardPage() {
             })}
           </div>
 
+          <div className="manualTriggerRow">
+            <button type="button" className="btn btnPrimary btnManualTrigger" disabled={triggering} onClick={triggerDoor}>
+              <Unlock size={18} /> Abrir ahora
+            </button>
+            {triggerSent && <span className="manualTriggerConfirm">Comando enviado — se abrirá en unos segundos</span>}
+          </div>
+
           <div className={`lastScanCard ${latest ? (latestOpened ? "lastScanOpen" : "lastScanDenied") : ""}`}>
             {!latest ? (
               <p className="muted">Todavía no se ha pasado ninguna tarjeta por esta puerta.</p>
             ) : (
               <>
                 <div className="lastScanResult">{latestOpened ? "ABIERTO" : "NO ABIERTO"}</div>
-                <div className="lastScanName">{latestInfo?.userName || "Tarjeta desconocida"}</div>
+                <div className="lastScanName">{personLabel(latest)}</div>
                 <div className="lastScanMeta">
-                  {latestInfo?.credLabel && <span>{latestInfo.credLabel} · </span>}
+                  {latest.reason !== "manual_trigger" && credentialInfo(latest.credential_id)?.credLabel && (
+                    <span>{credentialInfo(latest.credential_id).credLabel} · </span>
+                  )}
                   <span>{formatTime(latest.event_time)}</span>
-                  {latest.reason && <span> · {latest.reason}</span>}
+                  {latest.reason && latest.reason !== "manual_trigger" && <span> · {latest.reason}</span>}
                 </div>
               </>
             )}
@@ -155,8 +193,8 @@ export default function GuardPage() {
                   return (
                     <tr key={ev.id}>
                       <td className="muted">{formatTime(ev.event_time)}</td>
-                      <td>{info?.userName || "Desconocida"}</td>
-                      <td className="muted">{info?.credLabel || "—"}</td>
+                      <td>{personLabel(ev)}</td>
+                      <td className="muted">{ev.reason === "manual_trigger" ? "—" : info?.credLabel || "—"}</td>
                       <td>
                         <span className={`badge ${ev.result === "granted" ? "badgeSuccess" : "badgeDanger"}`}>
                           {ev.result === "granted" ? "Con acceso" : "Sin acceso"}

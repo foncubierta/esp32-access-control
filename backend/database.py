@@ -12,6 +12,7 @@ engine = create_engine(DB_URL, echo=False, connect_args={"check_same_thread": Fa
 _MIGRATIONS = [
     "ALTER TABLE door ADD COLUMN mode TEXT NOT NULL DEFAULT 'auto'",
     "ALTER TABLE accesslog ADD COLUMN door_mode TEXT",
+    "ALTER TABLE door ADD COLUMN trigger_seq INTEGER NOT NULL DEFAULT 0",
 ]
 
 

@@ -26,6 +26,7 @@ class SyncResponse(BaseModel):
     door_name: str
     door_active: bool
     door_mode: str
+    trigger_seq: int
     generated_at: datetime
     credentials: List[SyncCredential]
 
@@ -67,6 +68,7 @@ def sync(door: Door = Depends(get_current_door), session: Session = Depends(get_
         door_name=door.name,
         door_active=door.active,
         door_mode=door.mode,
+        trigger_seq=door.trigger_seq,
         generated_at=datetime.now(timezone.utc),
         credentials=credentials,
     )
@@ -76,14 +78,18 @@ class ModeResponse(BaseModel):
     door_id: int
     door_active: bool
     door_mode: str
+    trigger_seq: int
 
 
 @router.get("/mode", response_model=ModeResponse)
 def get_mode(door: Door = Depends(get_current_door)):
-    """Lightweight, high-frequency poll so a guard flipping the door mode
-    from the web takes effect in seconds — without re-fetching the whole
-    credential list on every check the way /sync does."""
-    return ModeResponse(door_id=door.id, door_active=door.active, door_mode=door.mode)
+    """Lightweight, high-frequency poll so a guard flipping the door mode —
+    or firing a one-off manual open — from the web takes effect in seconds,
+    without re-fetching the whole credential list on every check the way
+    /sync does. trigger_seq lets the node detect a manual "open now" click:
+    it bumps on every POST /api/doors/:id/trigger, and the node fires a
+    single pulse whenever it sees the value change since its last poll."""
+    return ModeResponse(door_id=door.id, door_active=door.active, door_mode=door.mode, trigger_seq=door.trigger_seq)
 
 
 class LogEntry(BaseModel):
