@@ -1,0 +1,40 @@
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
+from sqlmodel import Session, select
+
+from database import get_session
+from models import AdminUser
+from security import verify_password
+from auth import create_access_token
+from dependencies import get_current_admin
+
+router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+
+class AdminOut(BaseModel):
+    id: int
+    username: str
+
+
+@router.post("/login", response_model=LoginResponse)
+def login(body: LoginRequest, session: Session = Depends(get_session)):
+    admin = session.exec(select(AdminUser).where(AdminUser.username == body.username)).first()
+    if not admin or not verify_password(body.password, admin.password_hash):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+    token = create_access_token(admin.username)
+    return LoginResponse(access_token=token)
+
+
+@router.get("/me", response_model=AdminOut)
+def me(admin: AdminUser = Depends(get_current_admin)):
+    return AdminOut(id=admin.id, username=admin.username)
