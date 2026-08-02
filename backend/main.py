@@ -9,7 +9,7 @@ from database import create_db, engine
 from models import AdminUser
 from security import hash_password
 
-from routers import auth, users, credentials, doors, permissions, logs, node
+from routers import auth, users, credentials, doors, permissions, groups, logs, node
 
 
 def seed_admin():
@@ -47,6 +47,7 @@ app.include_router(users.router)
 app.include_router(credentials.router)
 app.include_router(doors.router)
 app.include_router(permissions.router)
+app.include_router(groups.router)
 app.include_router(logs.router)
 app.include_router(node.router)
 

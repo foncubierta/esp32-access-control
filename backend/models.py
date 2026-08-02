@@ -16,7 +16,22 @@ class User(SQLModel, table=True):
     full_name: str
     email: Optional[str] = None
     phone: Optional[str] = None
+    dni: Optional[str] = None
+    address: Optional[str] = None
+    photo_path: Optional[str] = None  # filename under backend/data/photos/, served via /api/users/:id/photo
     notes: Optional[str] = None
+    active: bool = Field(default=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class CredentialGroup(SQLModel, table=True):
+    """A named access profile (VIP, Mantenimiento, Zona A...). Every active
+    credential assigned to a group inherits whatever doors the group has
+    access to (GroupPermission), on top of any direct Permission it might
+    also hold — a credential's real access is the union of both."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str = Field(index=True, unique=True)
+    description: Optional[str] = None
     active: bool = Field(default=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -26,6 +41,7 @@ class Credential(SQLModel, table=True):
     only a SHA-256 hash — nodes hash what they read locally and compare hashes."""
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="user.id", index=True)
+    group_id: Optional[int] = Field(default=None, foreign_key="credentialgroup.id", index=True)
     type: str = Field(default="rfid")  # rfid | pin | nfc
     label: Optional[str] = None
     value_hash: str = Field(index=True)
@@ -54,6 +70,20 @@ class Permission(SQLModel, table=True):
     """Grants a credential access to a door, optionally restricted to days/hours."""
     id: Optional[int] = Field(default=None, primary_key=True)
     credential_id: int = Field(foreign_key="credential.id", index=True)
+    door_id: int = Field(foreign_key="door.id", index=True)
+    days_of_week: Optional[str] = None  # comma separated, 0=Mon..6=Sun, None = every day
+    time_start: Optional[str] = None  # "HH:MM", None = no lower bound
+    time_end: Optional[str] = None    # "HH:MM", None = no upper bound
+    active: bool = Field(default=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class GroupPermission(SQLModel, table=True):
+    """Grants every active credential in a CredentialGroup access to a Door,
+    optionally restricted to days/hours — same shape as Permission, just
+    scoped to a whole group instead of one credential."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    group_id: int = Field(foreign_key="credentialgroup.id", index=True)
     door_id: int = Field(foreign_key="door.id", index=True)
     days_of_week: Optional[str] = None  # comma separated, 0=Mon..6=Sun, None = every day
     time_start: Optional[str] = None  # "HH:MM", None = no lower bound

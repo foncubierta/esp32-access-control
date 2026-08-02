@@ -6,7 +6,7 @@ from sqlmodel import Session, select
 
 import enrollment
 from database import get_session
-from models import Door, Credential, Permission, AccessLog
+from models import Door, Credential, Permission, CredentialGroup, GroupPermission, AccessLog
 from dependencies import get_current_door
 
 router = APIRouter(prefix="/api/node", tags=["node"])
@@ -38,21 +38,28 @@ def sync(door: Door = Depends(get_current_door), session: Session = Depends(get_
     """Called periodically by the node. Returns the full set of credentials
     currently allowed through this door, so the node can cache it locally and
     keep enforcing access even if the network drops before the next sync.
-    An inactive door gets an empty list, which is what actually locks it down."""
+    An inactive door gets an empty list, which is what actually locks it down.
+
+    A credential's access is the union of two independent grants — direct
+    Permission on the credential itself, and GroupPermission via whatever
+    CredentialGroup it belongs to. The same credential can show up twice
+    here (once per grant, possibly with different schedules); the node
+    caches every row and grants access if *any* matching entry currently
+    allows it — see AccessController::evaluate() in the firmware."""
     door.last_seen = datetime.now(timezone.utc)
     session.add(door)
     session.commit()
 
     credentials: List[SyncCredential] = []
     if door.active:
-        rows = session.exec(
+        direct_rows = session.exec(
             select(Credential, Permission)
             .join(Permission, Permission.credential_id == Credential.id)
             .where(Permission.door_id == door.id)
             .where(Permission.active == True)  # noqa: E712
             .where(Credential.active == True)  # noqa: E712
         ).all()
-        credentials = [
+        credentials.extend(
             SyncCredential(
                 credential_id=credential.id,
                 value_hash=credential.value_hash,
@@ -62,8 +69,30 @@ def sync(door: Door = Depends(get_current_door), session: Session = Depends(get_
                 valid_from=credential.valid_from,
                 valid_until=credential.valid_until,
             )
-            for credential, permission in rows
-        ]
+            for credential, permission in direct_rows
+        )
+
+        group_rows = session.exec(
+            select(Credential, GroupPermission)
+            .join(CredentialGroup, CredentialGroup.id == Credential.group_id)
+            .join(GroupPermission, GroupPermission.group_id == CredentialGroup.id)
+            .where(GroupPermission.door_id == door.id)
+            .where(GroupPermission.active == True)  # noqa: E712
+            .where(CredentialGroup.active == True)  # noqa: E712
+            .where(Credential.active == True)  # noqa: E712
+        ).all()
+        credentials.extend(
+            SyncCredential(
+                credential_id=credential.id,
+                value_hash=credential.value_hash,
+                days_of_week=group_permission.days_of_week,
+                time_start=group_permission.time_start,
+                time_end=group_permission.time_end,
+                valid_from=credential.valid_from,
+                valid_until=credential.valid_until,
+            )
+            for credential, group_permission in group_rows
+        )
 
     return SyncResponse(
         door_id=door.id,

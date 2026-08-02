@@ -13,6 +13,10 @@ _MIGRATIONS = [
     "ALTER TABLE door ADD COLUMN mode TEXT NOT NULL DEFAULT 'auto'",
     "ALTER TABLE accesslog ADD COLUMN door_mode TEXT",
     "ALTER TABLE door ADD COLUMN trigger_seq INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE user ADD COLUMN dni TEXT",
+    "ALTER TABLE user ADD COLUMN address TEXT",
+    "ALTER TABLE user ADD COLUMN photo_path TEXT",
+    "ALTER TABLE credential ADD COLUMN group_id INTEGER REFERENCES credentialgroup(id)",
 ]
 
 

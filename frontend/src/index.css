@@ -181,6 +181,22 @@ code { background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px; fo
 .formError { background: var(--danger-dim); color: var(--danger); padding: 8px 12px; border-radius: var(--radius); font-size: 13px; }
 .hint { font-size: 12.5px; color: var(--text-secondary); }
 
+.avatarThumb { border-radius: 999px; object-fit: cover; border: 1px solid var(--border); }
+.avatarPlaceholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+
+.photoRow { display: flex; align-items: center; gap: 16px; }
+.photoPreview { width: 84px; height: 84px; border-radius: var(--radius-lg); object-fit: cover; border: 1px solid var(--border); }
+.photoPreviewEmpty { display: flex; align-items: center; justify-content: center; background: var(--bg-secondary); color: var(--text-secondary); }
+.photoRowActions { display: flex; align-items: center; gap: 8px; }
+
 .enrollRow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: -6px; }
 .enrollRow select { width: auto; flex: 1; min-width: 120px; }
 .enrollRow .btn { white-space: nowrap; }

@@ -1,10 +1,11 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { Users, KeyRound, DoorOpen, ShieldCheck, ScrollText, LogOut, Eye } from "lucide-react";
+import { Users, KeyRound, Layers, DoorOpen, ShieldCheck, ScrollText, LogOut, Eye } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 
 const NAV = [
   { to: "/users", label: "Usuarios", icon: Users },
   { to: "/credentials", label: "Credenciales", icon: KeyRound },
+  { to: "/groups", label: "Grupos", icon: Layers },
   { to: "/doors", label: "Puertas / Nodos", icon: DoorOpen },
   { to: "/permissions", label: "Permisos", icon: ShieldCheck },
   { to: "/guard", label: "Vigilancia", icon: Eye },

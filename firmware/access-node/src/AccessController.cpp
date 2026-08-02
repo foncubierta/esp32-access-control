@@ -25,50 +25,62 @@ bool dayListContains(const String &daysOfWeek, int today) {
 }
 }  // namespace
 
+// A credential can appear more than once in the cache — once per grant
+// (its own direct Permission, plus one per CredentialGroup it belongs to
+// that has access to this door), each with its own schedule. Access is
+// granted if *any* of those entries currently allows it; if none do, the
+// reason reported is from whichever entry got furthest (so "schedule" beats
+// "unknown_credential" when the hash matched something, just outside its
+// window).
 AccessDecision AccessController::evaluate(const String &valueHash) const {
   if (!_doorActive) {
     return {AccessResult::DENIED, "door_inactive", -1};
   }
 
-  const CachedCredential *match = nullptr;
-  for (size_t i = 0; i < _count; i++) {
-    if (_items[i].valueHash.equalsIgnoreCase(valueHash)) {
-      match = &_items[i];
-      break;
-    }
-  }
-  if (!match) {
-    return {AccessResult::DENIED, "unknown_credential", -1};
-  }
+  bool foundHash = false;
+  int32_t matchedCredentialId = -1;
+  const char *bestReason = "unknown_credential";
 
   time_t nowUtc = time(nullptr);
-  if (match->validFrom != 0 && nowUtc < match->validFrom) {
-    return {AccessResult::DENIED, "not_yet_valid", (int32_t)match->credentialId};
-  }
-  if (match->validUntil != 0 && nowUtc > match->validUntil) {
-    return {AccessResult::DENIED, "expired", (int32_t)match->credentialId};
-  }
-
   struct tm local;
   localtime_r(&nowUtc, &local);
+  int today = TimeUtil::isoWeekday(local);
+  int nowMin = local.tm_hour * 60 + local.tm_min;
 
-  if (match->daysOfWeek.length() > 0) {
-    int today = TimeUtil::isoWeekday(local);
-    if (!dayListContains(match->daysOfWeek, today)) {
-      return {AccessResult::DENIED, "schedule", (int32_t)match->credentialId};
+  for (size_t i = 0; i < _count; i++) {
+    const CachedCredential &c = _items[i];
+    if (!c.valueHash.equalsIgnoreCase(valueHash)) continue;
+    foundHash = true;
+    matchedCredentialId = (int32_t)c.credentialId;
+
+    if (c.validFrom != 0 && nowUtc < c.validFrom) {
+      bestReason = "not_yet_valid";
+      continue;
     }
+    if (c.validUntil != 0 && nowUtc > c.validUntil) {
+      bestReason = "expired";
+      continue;
+    }
+    if (c.daysOfWeek.length() > 0 && !dayListContains(c.daysOfWeek, today)) {
+      bestReason = "schedule";
+      continue;
+    }
+    if (c.timeStart.length() > 0 || c.timeEnd.length() > 0) {
+      int startMin = c.timeStart.length() ? TimeUtil::parseHm(c.timeStart) : 0;
+      int endMin = c.timeEnd.length() ? TimeUtil::parseHm(c.timeEnd) : (23 * 60 + 59);
+      if (startMin < 0) startMin = 0;
+      if (endMin < 0) endMin = 23 * 60 + 59;
+      if (nowMin < startMin || nowMin > endMin) {
+        bestReason = "schedule";
+        continue;
+      }
+    }
+
+    return {AccessResult::GRANTED, nullptr, matchedCredentialId};
   }
 
-  if (match->timeStart.length() > 0 || match->timeEnd.length() > 0) {
-    int nowMin = local.tm_hour * 60 + local.tm_min;
-    int startMin = match->timeStart.length() ? TimeUtil::parseHm(match->timeStart) : 0;
-    int endMin = match->timeEnd.length() ? TimeUtil::parseHm(match->timeEnd) : (23 * 60 + 59);
-    if (startMin < 0) startMin = 0;
-    if (endMin < 0) endMin = 23 * 60 + 59;
-    if (nowMin < startMin || nowMin > endMin) {
-      return {AccessResult::DENIED, "schedule", (int32_t)match->credentialId};
-    }
+  if (!foundHash) {
+    return {AccessResult::DENIED, "unknown_credential", -1};
   }
-
-  return {AccessResult::GRANTED, nullptr, (int32_t)match->credentialId};
+  return {AccessResult::DENIED, bestReason, matchedCredentialId};
 }

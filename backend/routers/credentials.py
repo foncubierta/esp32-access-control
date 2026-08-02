@@ -14,6 +14,7 @@ router = APIRouter(prefix="/api/credentials", tags=["credentials"], dependencies
 
 class CredentialCreate(BaseModel):
     user_id: int
+    group_id: Optional[int] = None
     type: str = "rfid"
     label: Optional[str] = None
     value: str  # raw value — hashed before storage, never persisted or returned as-is
@@ -23,6 +24,7 @@ class CredentialCreate(BaseModel):
 
 
 class CredentialUpdate(BaseModel):
+    group_id: Optional[int] = None
     label: Optional[str] = None
     active: Optional[bool] = None
     valid_from: Optional[datetime] = None

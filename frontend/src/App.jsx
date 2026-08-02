@@ -4,6 +4,7 @@ import Layout from "./components/Layout.jsx";
 import LoginPage from "./pages/LoginPage.jsx";
 import UsersPage from "./pages/UsersPage.jsx";
 import CredentialsPage from "./pages/CredentialsPage.jsx";
+import GroupsPage from "./pages/GroupsPage.jsx";
 import DoorsPage from "./pages/DoorsPage.jsx";
 import PermissionsPage from "./pages/PermissionsPage.jsx";
 import LogsPage from "./pages/LogsPage.jsx";
@@ -24,6 +25,7 @@ export default function App() {
         <Route index element={<Navigate to="/users" replace />} />
         <Route path="users" element={<UsersPage />} />
         <Route path="credentials" element={<CredentialsPage />} />
+        <Route path="groups" element={<GroupsPage />} />
         <Route path="doors" element={<DoorsPage />} />
         <Route path="permissions" element={<PermissionsPage />} />
         <Route path="logs" element={<LogsPage />} />

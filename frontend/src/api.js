@@ -6,9 +6,10 @@ function getToken() {
 
 async function req(path, opts = {}) {
   const token = getToken();
+  const isFormData = opts.body instanceof FormData;
   const res = await fetch(BASE + path, {
     headers: {
-      "Content-Type": "application/json",
+      ...(isFormData ? {} : { "Content-Type": "application/json" }),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     ...opts,
@@ -50,12 +51,38 @@ export const api = {
     create: (body) => req("/users", { method: "POST", body: JSON.stringify(body) }),
     update: (id, body) => req(`/users/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
     delete: (id) => req(`/users/${id}`, { method: "DELETE" }),
+    uploadPhoto: (id, file) => {
+      const form = new FormData();
+      form.append("file", file);
+      return req(`/users/${id}/photo`, { method: "POST", body: form });
+    },
+    deletePhoto: (id) => req(`/users/${id}/photo`, { method: "DELETE" }),
+    photoUrl: async (id) => {
+      const token = getToken();
+      const res = await fetch(`${BASE}/users/${id}/photo`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) return null;
+      return URL.createObjectURL(await res.blob());
+    },
   },
   credentials: {
     list: (userId) => req(withQuery("/credentials", { user_id: userId })),
     create: (body) => req("/credentials", { method: "POST", body: JSON.stringify(body) }),
     update: (id, body) => req(`/credentials/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
     delete: (id) => req(`/credentials/${id}`, { method: "DELETE" }),
+  },
+  groups: {
+    list: () => req("/groups"),
+    create: (body) => req("/groups", { method: "POST", body: JSON.stringify(body) }),
+    update: (id, body) => req(`/groups/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+    delete: (id) => req(`/groups/${id}`, { method: "DELETE" }),
+    permissions: {
+      list: (params) => req(withQuery("/groups/permissions", params)),
+      create: (body) => req("/groups/permissions", { method: "POST", body: JSON.stringify(body) }),
+      update: (id, body) => req(`/groups/permissions/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+      delete: (id) => req(`/groups/permissions/${id}`, { method: "DELETE" }),
+    },
   },
   doors: {
     list: () => req("/doors"),

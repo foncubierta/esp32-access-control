@@ -42,13 +42,26 @@ copiarlo del monitor serie.
 
 ## Modelo de datos
 
-- **User**: persona que puede tener credenciales.
-- **Credential**: una tarjeta/PIN/tag de un usuario (tipo `rfid` | `pin` | `nfc`), con validez opcional (`valid_from` / `valid_until`).
+- **User**: persona que puede tener credenciales. Incluye ficha tipo carnet: `dni`, `address`, `photo_path` (foto servida vía `/api/users/:id/photo`, JWT-protegida).
+- **Credential**: una tarjeta/PIN/tag de un usuario (tipo `rfid` | `pin` | `nfc`), con validez opcional (`valid_from` / `valid_until`). Puede pertenecer a un `CredentialGroup` (`group_id`, opcional).
+- **CredentialGroup**: perfil de acceso con nombre (VIP, Mantenimiento, Zona A...). Se gestiona en **Grupos**.
 - **Door**: una puerta/cancela física = un nodo ESP32, con su propia `api_key`.
-- **Permission**: une una `Credential` con una `Door`, con horario opcional (`days_of_week`, `time_start`, `time_end`). Sin horario = acceso permitido en cualquier momento.
+- **Permission**: acceso suelto de UNA `Credential` a UNA `Door`, con horario opcional (`days_of_week`, `time_start`, `time_end`). Sin horario = acceso permitido en cualquier momento.
+- **GroupPermission**: igual que `Permission` pero a nivel de `CredentialGroup` — da acceso a esa puerta a *todas* las credenciales activas del grupo.
 - **AccessLog**: eventos de apertura/denegación subidos por los nodos, para auditoría. Incluye `door_mode`: en qué modo estaba la puerta cuando ocurrió, independientemente de si la credencial en sí tenía o no acceso (`result`).
 
 Desactivar una `Door` hace que el siguiente `/api/node/sync` le devuelva la lista de credenciales vacía — así es como se bloquea una puerta remotamente.
+
+### Grupos de credenciales
+
+El acceso real de una credencial a una puerta es la **unión** de dos caminos independientes, y puede tener ambos a la vez:
+
+1. **Directo**: un `Permission` suelto para esa credencial concreta (página **Permisos**).
+2. **Por grupo**: la credencial pertenece a un `CredentialGroup` (VIP, Mantenimiento, Zona A...) que tiene un `GroupPermission` para esa puerta (página **Grupos**).
+
+`/api/node/sync` puede devolver la misma credencial dos veces — una por cada camino, cada una con su propio horario — y el nodo la deja pasar si **cualquiera** de las entradas la permite en ese momento (`AccessController::evaluate()` en el firmware recorre todas las coincidencias, no se queda con la primera). Así una credencial puede tener acceso 24h a su puerta habitual por grupo, y además un permiso suelto puntual a otra puerta fuera de horario, sin que se pisen.
+
+Borrar un grupo no borra sus credenciales: simplemente las deja sin grupo (`group_id = null`), y pierden el acceso que venía por ese camino (conservan cualquier permiso directo que tuvieran).
 
 ### Modos de puerta (vista de vigilancia)
 
@@ -114,14 +127,27 @@ POST   /api/auth/login              Login admin → { access_token }
 GET    /api/auth/me                 Admin autenticado
 
 GET    /api/users                   Listar usuarios
-POST   /api/users                   Crear usuario
+POST   /api/users                   Crear usuario ({ full_name, dni?, address?, email?, phone?, ... })
 PATCH  /api/users/:id                Editar usuario
-DELETE /api/users/:id                Borrar usuario (cascada: credenciales + permisos)
+DELETE /api/users/:id                Borrar usuario (cascada: credenciales + permisos + foto)
+POST   /api/users/:id/photo          Subir/reemplazar foto (multipart, campo "file")
+GET    /api/users/:id/photo          Descargar foto (404 si no tiene)
+DELETE /api/users/:id/photo          Quitar foto
 
 GET    /api/credentials?user_id=    Listar credenciales (opcionalmente por usuario)
-POST   /api/credentials             Crear credencial ({ user_id, type, value, ... })
-PATCH  /api/credentials/:id          Editar / rotar valor
+POST   /api/credentials             Crear credencial ({ user_id, group_id?, type, value, ... })
+PATCH  /api/credentials/:id          Editar / rotar valor / cambiar de grupo
 DELETE /api/credentials/:id          Borrar credencial (cascada: permisos)
+
+GET    /api/groups                  Listar grupos de credenciales
+POST   /api/groups                  Crear grupo ({ name, description?, active })
+PATCH  /api/groups/:id               Editar grupo
+DELETE /api/groups/:id               Borrar grupo (sus credenciales quedan con group_id = null)
+
+GET    /api/groups/permissions?group_id=&door_id=   Listar accesos de grupo a puertas
+POST   /api/groups/permissions      Dar acceso a un grupo ({ group_id, door_id, days_of_week?, time_start?, time_end? })
+PATCH  /api/groups/permissions/:id   Editar / activar / desactivar
+DELETE /api/groups/permissions/:id   Quitar el acceso
 
 GET    /api/doors                   Listar puertas/nodos
 POST   /api/doors                   Crear puerta (genera api_key)
@@ -129,7 +155,7 @@ PATCH  /api/doors/:id                Editar puerta (incluye mode: auto|open|clos
 POST   /api/doors/:id/rotate-key     Regenerar api_key del nodo
 DELETE /api/doors/:id                Borrar puerta (cascada: permisos)
 
-GET    /api/permissions?door_id=&credential_id=&user_id=   Listar permisos
+GET    /api/permissions?door_id=&credential_id=&user_id=   Listar permisos sueltos (por credencial)
 POST   /api/permissions             Crear permiso ({ credential_id, door_id, days_of_week?, time_start?, time_end? })
 PATCH  /api/permissions/:id          Editar / activar / desactivar
 DELETE /api/permissions/:id          Borrar permiso

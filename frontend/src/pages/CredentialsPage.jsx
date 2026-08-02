@@ -3,7 +3,7 @@ import { Plus, Pencil, Trash2, Scan } from "lucide-react";
 import { api } from "../api.js";
 import Modal from "../components/Modal.jsx";
 
-const emptyForm = { user_id: "", type: "rfid", label: "", value: "", active: true, valid_from: "", valid_until: "" };
+const emptyForm = { user_id: "", group_id: "", type: "rfid", label: "", value: "", active: true, valid_from: "", valid_until: "" };
 const TYPE_LABELS = { rfid: "RFID", pin: "PIN", nfc: "NFC" };
 const ENROLL_POLL_MS = 1000;
 const ENROLL_TIMEOUT_MS = 30000;
@@ -11,6 +11,7 @@ const ENROLL_TIMEOUT_MS = 30000;
 export default function CredentialsPage() {
   const [credentials, setCredentials] = useState([]);
   const [users, setUsers] = useState([]);
+  const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyForm);
@@ -24,10 +25,11 @@ export default function CredentialsPage() {
 
   const load = useCallback(() => {
     setLoading(true);
-    Promise.all([api.credentials.list(), api.users.list()])
-      .then(([creds, us]) => {
+    Promise.all([api.credentials.list(), api.users.list(), api.groups.list()])
+      .then(([creds, us, gs]) => {
         setCredentials(creds);
         setUsers(us);
+        setGroups(gs);
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
@@ -45,6 +47,7 @@ export default function CredentialsPage() {
   useEffect(() => () => stopEnrollPolling(), []);
 
   const userName = (id) => users.find((u) => u.id === id)?.full_name || `#${id}`;
+  const groupName = (id) => (id == null ? null : groups.find((g) => g.id === id)?.name || `#${id}`);
 
   function stopEnrollPolling() {
     clearInterval(enrollPollRef.current);
@@ -112,6 +115,7 @@ export default function CredentialsPage() {
     cancelEnroll();
     setForm({
       user_id: cred.user_id,
+      group_id: cred.group_id != null ? String(cred.group_id) : "",
       type: cred.type,
       label: cred.label || "",
       value: "",
@@ -130,6 +134,7 @@ export default function CredentialsPage() {
       const payload = {
         ...form,
         user_id: Number(form.user_id),
+        group_id: form.group_id ? Number(form.group_id) : null,
         valid_from: form.valid_from || null,
         valid_until: form.valid_until || null,
       };
@@ -171,6 +176,7 @@ export default function CredentialsPage() {
           <thead>
             <tr>
               <th>Usuario</th>
+              <th>Grupo</th>
               <th>Tipo</th>
               <th>Etiqueta</th>
               <th>Vista previa</th>
@@ -183,6 +189,7 @@ export default function CredentialsPage() {
             {credentials.map((c) => (
               <tr key={c.id}>
                 <td>{userName(c.user_id)}</td>
+                <td className="muted">{groupName(c.group_id) || "—"}</td>
                 <td>{TYPE_LABELS[c.type] || c.type}</td>
                 <td>{c.label || "—"}</td>
                 <td>
@@ -208,7 +215,7 @@ export default function CredentialsPage() {
             ))}
             {credentials.length === 0 && (
               <tr>
-                <td colSpan={7} className="muted">
+                <td colSpan={8} className="muted">
                   No hay credenciales todavía.
                 </td>
               </tr>
@@ -249,6 +256,17 @@ export default function CredentialsPage() {
             <label>
               Etiqueta
               <input placeholder="p.ej. Tarjeta principal" value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} />
+            </label>
+            <label>
+              Grupo (VIP, Mantenimiento, Zona A...)
+              <select value={form.group_id} onChange={(e) => setForm({ ...form, group_id: e.target.value })}>
+                <option value="">Sin grupo</option>
+                {groups.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.name}
+                  </option>
+                ))}
+              </select>
             </label>
             <label>
               {editing.id ? "Nuevo valor (dejar vacío para no cambiar)" : "Valor (UID de la tarjeta o PIN)"}
