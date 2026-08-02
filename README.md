@@ -105,7 +105,16 @@ POST   /api/node/logs        Sube en lote los eventos de acceso registrados offl
 POST   /api/node/heartbeat   Marca el nodo como visto (last_seen)
 ```
 
+## Firmware ESP32
+
+Ver [`firmware/access-node/README.md`](firmware/access-node/README.md). PlatformIO +
+Arduino. Lee tarjetas Wiegand (D0/D1, cualquier longitud de trama), soporta
+WiFi o Ethernet (módulo W5500) configurables por portal cautivo, cachea las
+credenciales localmente para seguir funcionando sin red, y sube los logs de
+acceso en cuanto puede.
+
 ## Pendiente
 
-- Firmware ESP32 (lectura RFID/NFC/teclado, control del relé, cache local + sync periódico, cola de eventos offline).
+- Compilar/flashear y probar el firmware contra hardware real (no verificado en este entorno — ver nota de compilación en el README del firmware).
 - Endpoint de revocación urgente (push) para no depender solo del intervalo de sync en casos como baja de un usuario.
+- Lectores adicionales más allá de Wiegand (teclado/PIN nativo del nodo, NFC vía I2C, etc.) si hacen falta.
