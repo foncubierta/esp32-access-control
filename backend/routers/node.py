@@ -25,6 +25,7 @@ class SyncResponse(BaseModel):
     door_id: int
     door_name: str
     door_active: bool
+    door_mode: str
     generated_at: datetime
     credentials: List[SyncCredential]
 
@@ -65,16 +66,32 @@ def sync(door: Door = Depends(get_current_door), session: Session = Depends(get_
         door_id=door.id,
         door_name=door.name,
         door_active=door.active,
+        door_mode=door.mode,
         generated_at=datetime.now(timezone.utc),
         credentials=credentials,
     )
 
 
+class ModeResponse(BaseModel):
+    door_id: int
+    door_active: bool
+    door_mode: str
+
+
+@router.get("/mode", response_model=ModeResponse)
+def get_mode(door: Door = Depends(get_current_door)):
+    """Lightweight, high-frequency poll so a guard flipping the door mode
+    from the web takes effect in seconds — without re-fetching the whole
+    credential list on every check the way /sync does."""
+    return ModeResponse(door_id=door.id, door_active=door.active, door_mode=door.mode)
+
+
 class LogEntry(BaseModel):
     value_hash: Optional[str] = None
     credential_id: Optional[int] = None
-    result: str  # granted | denied
+    result: str  # granted | denied — whether the credential itself would have had access
     reason: Optional[str] = None
+    door_mode: Optional[str] = None  # what the door was set to when this happened
     event_time: datetime
 
 
@@ -96,6 +113,7 @@ def upload_logs(
                 raw_value_hash=entry.value_hash,
                 result=entry.result,
                 reason=entry.reason,
+                door_mode=entry.door_mode,
                 event_time=entry.event_time,
             )
         )

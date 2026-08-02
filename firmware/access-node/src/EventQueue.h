@@ -5,8 +5,9 @@
 struct LogEvent {
   String valueHash;      // may be empty
   int32_t credentialId;  // -1 = unknown/omit
-  String result;         // "granted" | "denied"
+  String result;         // "granted" | "denied" — whether the credential itself had access
   String reason;         // may be empty
+  String doorMode;       // "auto" | "open" | "closed" | "identify" — mode at the time
   String eventTimeIso;   // "YYYY-MM-DDTHH:MM:SSZ"
 };
 

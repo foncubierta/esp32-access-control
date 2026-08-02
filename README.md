@@ -11,7 +11,7 @@ Control de accesos multi-puerta. Un nodo **ESP32** por puerta lee una credencial
 ```
 
 - **Backend** (`backend/`): FastAPI + SQLModel + SQLite. Expone la API de administración (usuarios, credenciales, puertas, permisos, logs) protegida por JWT, y una API separada para los nodos protegida por API key.
-- **Frontend** (`frontend/`): React + Vite. Panel de administración para dar de alta usuarios, sus credenciales, las puertas/nodos y qué credencial puede abrir qué puerta (con horario opcional).
+- **Frontend** (`frontend/`): React + Vite. Panel de administración para dar de alta usuarios, sus credenciales, las puertas/nodos y qué credencial puede abrir qué puerta (con horario opcional). Incluye una página de **Vigilancia** (`/guard`) pensada para un vigilante: qué puerta mirar, el modo actual de esa puerta con botones grandes para cambiarlo, y quién ha pasado la tarjeta en los últimos segundos (polling cada 1.5s).
 - **Nodo ESP32** (firmware, pendiente de implementar): se autentica con una API key por puerta, sincroniza periódicamente la lista de credenciales permitidas para *su* puerta y cachea esa lista localmente — así sigue funcionando aunque se caiga el WiFi. Encola los eventos de apertura y los sube al backend en el siguiente sync.
 
 ### Por qué sync periódico y no validación en tiempo real
@@ -28,9 +28,22 @@ El valor bruto de una credencial (UID de tarjeta, PIN...) **nunca se persiste**.
 - **Credential**: una tarjeta/PIN/tag de un usuario (tipo `rfid` | `pin` | `nfc`), con validez opcional (`valid_from` / `valid_until`).
 - **Door**: una puerta/cancela física = un nodo ESP32, con su propia `api_key`.
 - **Permission**: une una `Credential` con una `Door`, con horario opcional (`days_of_week`, `time_start`, `time_end`). Sin horario = acceso permitido en cualquier momento.
-- **AccessLog**: eventos de apertura/denegación subidos por los nodos, para auditoría.
+- **AccessLog**: eventos de apertura/denegación subidos por los nodos, para auditoría. Incluye `door_mode`: en qué modo estaba la puerta cuando ocurrió, independientemente de si la credencial en sí tenía o no acceso (`result`).
 
 Desactivar una `Door` hace que el siguiente `/api/node/sync` le devuelva la lista de credenciales vacía — así es como se bloquea una puerta remotamente.
+
+### Modos de puerta (vista de vigilancia)
+
+Cada `Door` tiene un `mode` que un vigilante puede cambiar en caliente desde la web (página **Vigilancia**), independiente del resultado real de la credencial:
+
+| Modo | Comportamiento |
+|---|---|
+| `auto` (por defecto) | Dispara el relé solo si la credencial tiene permiso vigente |
+| `open` | Puerta libre: cualquier tarjeta dispara el relé, tenga o no permiso |
+| `closed` | Nunca dispara el relé, aunque la credencial tenga permiso |
+| `identify` | Identifica a la persona (aparece en la web) pero nunca dispara el relé |
+
+El nodo separa la **decisión de acceso** (¿tendría paso esta credencial?) de la **acción física** (¿se dispara el relé?) — así el log siempre registra la verdad sobre la credencial, y el modo se aplica como filtro final antes de tocar el relé. El nodo consulta el modo por un endpoint ligero (`/api/node/mode`) cada pocos segundos, separado del sync completo de credenciales, para que el cambio de modo se note casi al instante sin recargar toda la lista de credenciales en cada poll.
 
 ## Correr en local (desarrollo)
 
@@ -85,7 +98,7 @@ DELETE /api/credentials/:id          Borrar credencial (cascada: permisos)
 
 GET    /api/doors                   Listar puertas/nodos
 POST   /api/doors                   Crear puerta (genera api_key)
-PATCH  /api/doors/:id                Editar puerta
+PATCH  /api/doors/:id                Editar puerta (incluye mode: auto|open|closed|identify)
 POST   /api/doors/:id/rotate-key     Regenerar api_key del nodo
 DELETE /api/doors/:id                Borrar puerta (cascada: permisos)
 
@@ -100,7 +113,8 @@ GET    /api/logs?door_id=&credential_id=&result=&since=&limit=   Ver logs de acc
 ### Nodo ESP32 (header `X-Api-Key: <api_key de la puerta>`)
 
 ```
-GET    /api/node/sync        Credenciales (hasheadas) válidas para esta puerta ahora mismo
+GET    /api/node/sync        Credenciales (hasheadas) + modo, válidas para esta puerta ahora mismo
+GET    /api/node/mode        Poll ligero y frecuente de door_active/door_mode (sin la lista de credenciales)
 POST   /api/node/logs        Sube en lote los eventos de acceso registrados offline
 POST   /api/node/heartbeat   Marca el nodo como visto (last_seen)
 ```

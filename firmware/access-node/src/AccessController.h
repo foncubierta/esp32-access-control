@@ -33,12 +33,23 @@ class AccessController {
   void setDoorActive(bool active) { _doorActive = active; }
   bool doorActive() const { return _doorActive; }
 
+  // "auto" | "open" | "closed" | "identify" — set by the guard view via
+  // /api/doors/:id, read by the node via the fast /api/node/mode poll.
+  // Deliberately kept separate from evaluate(): the access decision below
+  // always reflects the true permission check, and main.cpp applies the
+  // mode as the final gate on whether the relay actually fires — so the
+  // log always records what the credential was really entitled to, even
+  // when the mode overrode it.
+  void setMode(const String &mode) { _mode = mode; }
+  String mode() const { return _mode; }
+
   AccessDecision evaluate(const String &valueHash) const;
 
  private:
   CachedCredential _items[MAX_CACHED_CREDENTIALS];
   size_t _count = 0;
   bool _doorActive = true;
+  String _mode = "auto";
 };
 
 extern AccessController Access;

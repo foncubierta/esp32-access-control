@@ -54,6 +54,7 @@ bool BackendApi::sync() {
   }
 
   bool doorActive = doc["door_active"] | true;
+  const char *doorMode = doc["door_mode"] | "auto";
   JsonArray creds = doc["credentials"].as<JsonArray>();
 
   static CachedCredential buffer[MAX_CACHED_CREDENTIALS];
@@ -79,7 +80,27 @@ bool BackendApi::sync() {
 
   Access.replaceCache(buffer, count);
   Access.setDoorActive(doorActive);
-  Serial.printf("[api] sync OK — %u credential(s) cached, door_active=%d\n", (unsigned)count, doorActive);
+  Access.setMode(String(doorMode));
+  Serial.printf("[api] sync OK — %u credential(s) cached, door_active=%d, mode=%s\n", (unsigned)count, doorActive,
+                doorMode);
+  return true;
+}
+
+bool BackendApi::syncMode() {
+  if (!Network.isConnected()) return false;
+
+  String host;
+  uint16_t port;
+  if (!parseHostPort(Network.config().backendUrl, host, port)) return false;
+
+  HttpResponse resp = SimpleHttp::request(Network.client(), host, port, "/api/node/mode", "GET", Network.config().apiKey);
+  if (resp.statusCode != 200) return false;
+
+  JsonDocument doc;
+  if (deserializeJson(doc, resp.body)) return false;
+
+  Access.setDoorActive(doc["door_active"] | true);
+  Access.setMode(String((const char *)(doc["door_mode"] | "auto")));
   return true;
 }
 
@@ -102,6 +123,7 @@ bool BackendApi::uploadLogs() {
     if (batch[i].credentialId >= 0) e["credential_id"] = batch[i].credentialId;
     e["result"] = batch[i].result;
     if (batch[i].reason.length()) e["reason"] = batch[i].reason;
+    if (batch[i].doorMode.length()) e["door_mode"] = batch[i].doorMode;
     e["event_time"] = batch[i].eventTimeIso;
   }
 

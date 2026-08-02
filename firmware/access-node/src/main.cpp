@@ -12,8 +12,10 @@
 
 namespace {
 uint32_t lastSyncMs = 0;
+uint32_t lastModePollMs = 0;
 uint32_t lastLogFlushMs = 0;
 uint32_t lastHeartbeatMs = 0;
+constexpr uint32_t MODE_POLL_INTERVAL_MS = 5000;
 constexpr uint32_t LOG_FLUSH_INTERVAL_MS = 15000;
 constexpr uint32_t HEARTBEAT_INTERVAL_MS = 60000;
 
@@ -26,6 +28,17 @@ String nowIso8601() {
   return String(buf);
 }
 
+// The access decision (would this credential normally get through?) and the
+// physical action (does the relay actually fire?) are deliberately separate
+// — "auto" is the only mode where they're the same thing.
+bool shouldPulseRelay(const String &mode, bool doorActive, AccessResult result) {
+  if (!doorActive) return false;
+  if (mode == "open") return true;      // force-open: everyone gets a pulse
+  if (mode == "closed") return false;   // force-closed: no one does, even with valid access
+  if (mode == "identify") return false; // identify-only: never actuate, just log who it was
+  return result == AccessResult::GRANTED;  // "auto" (and any unrecognized value)
+}
+
 void handleCardScan() {
   String rawValue;
   uint8_t bitCount;
@@ -36,27 +49,38 @@ void handleCardScan() {
 
   String hash = sha256HexOfCredential(rawValue);
   AccessDecision decision = Access.evaluate(hash);
-  bool granted = decision.result == AccessResult::GRANTED;
+  String mode = Access.mode();
+  bool pulseRelay = shouldPulseRelay(mode, Access.doorActive(), decision.result);
 
-  Serial.printf("[card] %u bits raw=%s hash=%s -> %s", bitCount, rawValue.c_str(), hash.c_str(),
-                granted ? "GRANTED" : "DENIED");
+  Serial.printf("[card] %u bits raw=%s hash=%s eval=%s", bitCount, rawValue.c_str(), hash.c_str(),
+                decision.result == AccessResult::GRANTED ? "GRANTED" : "DENIED");
   if (bitCount == 26) Serial.printf(" (26-bit FC=%u CN=%lu)", facility, (unsigned long)card);
   if (decision.reason) Serial.printf(" reason=%s", decision.reason);
-  Serial.println();
+  Serial.printf(" mode=%s relay=%s\n", mode.c_str(), pulseRelay ? "FIRED" : "no");
   // ^ This is also how you enroll a new card: badge it here, copy the raw
   // value printed above, and paste it into the credential's "Value" field
   // in the admin panel (Credenciales > Nueva credencial).
 
+  // Fire the relay before any network I/O — a slow or unreachable backend
+  // must never delay the physical door action.
+  if (pulseRelay) {
+    Relay.pulse(Network.config().relayPulseMs);
+  }
+
   LogEvent ev;
   ev.valueHash = hash;
   ev.credentialId = decision.credentialId;
-  ev.result = granted ? "granted" : "denied";
+  ev.result = (decision.result == AccessResult::GRANTED) ? "granted" : "denied";
   ev.reason = decision.reason ? String(decision.reason) : String();
+  ev.doorMode = mode;
   ev.eventTimeIso = nowIso8601();
   PendingLogs.push(ev);
 
-  if (granted) {
-    Relay.pulse(Network.config().relayPulseMs);
+  // Best-effort immediate upload so the guard view sees it within a couple
+  // of seconds instead of waiting for the next periodic flush — falls back
+  // to that periodic flush if this fails (offline), so nothing is lost.
+  if (Network.isConnected()) {
+    BackendApi::uploadLogs();
   }
 }
 }  // namespace
@@ -78,8 +102,9 @@ void setup() {
     if (!TimeUtil::syncNtp(Network.config().tz)) {
       Serial.println("[main] NTP sync timed out — schedules may be evaluated against a wrong clock until it lands.");
     }
-    BackendApi::sync();
+    BackendApi::sync();  // also seeds the mode, so the fast poll timer below just refreshes it
     lastSyncMs = millis();
+    lastModePollMs = millis();
   } else {
     Serial.println("[main] Not connected yet — will keep the cached credential list (empty on first boot) until it comes up.");
   }
@@ -96,6 +121,11 @@ void loop() {
   if (Network.isConnected() && now - lastSyncMs >= syncIntervalMs) {
     lastSyncMs = now;
     BackendApi::sync();
+  }
+
+  if (Network.isConnected() && now - lastModePollMs >= MODE_POLL_INTERVAL_MS) {
+    lastModePollMs = now;
+    BackendApi::syncMode();
   }
 
   if (Network.isConnected() && !PendingLogs.empty() && now - lastLogFlushMs >= LOG_FLUSH_INTERVAL_MS) {

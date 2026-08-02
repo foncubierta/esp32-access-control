@@ -7,6 +7,7 @@ import CredentialsPage from "./pages/CredentialsPage.jsx";
 import DoorsPage from "./pages/DoorsPage.jsx";
 import PermissionsPage from "./pages/PermissionsPage.jsx";
 import LogsPage from "./pages/LogsPage.jsx";
+import GuardPage from "./pages/GuardPage.jsx";
 
 export default function App() {
   return (
@@ -26,6 +27,7 @@ export default function App() {
         <Route path="doors" element={<DoorsPage />} />
         <Route path="permissions" element={<PermissionsPage />} />
         <Route path="logs" element={<LogsPage />} />
+        <Route path="guard" element={<GuardPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

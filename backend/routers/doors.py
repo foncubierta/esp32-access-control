@@ -10,6 +10,13 @@ from security import generate_api_key
 
 router = APIRouter(prefix="/api/doors", tags=["doors"], dependencies=[Depends(get_current_admin)])
 
+DOOR_MODES = {"auto", "open", "closed", "identify"}
+
+
+def _validate_mode(mode: Optional[str]):
+    if mode is not None and mode not in DOOR_MODES:
+        raise HTTPException(status_code=400, detail=f"mode must be one of {sorted(DOOR_MODES)}")
+
 
 class DoorCreate(BaseModel):
     name: str
@@ -23,6 +30,7 @@ class DoorUpdate(BaseModel):
     location: Optional[str] = None
     description: Optional[str] = None
     active: Optional[bool] = None
+    mode: Optional[str] = None
 
 
 @router.get("", response_model=List[Door])
@@ -44,6 +52,7 @@ def update_door(door_id: int, body: DoorUpdate, session: Session = Depends(get_s
     door = session.get(Door, door_id)
     if not door:
         raise HTTPException(status_code=404, detail="Door not found")
+    _validate_mode(body.mode)
     for key, value in body.model_dump(exclude_unset=True).items():
         setattr(door, key, value)
     session.add(door)

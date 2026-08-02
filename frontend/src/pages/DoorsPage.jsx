@@ -3,7 +3,9 @@ import { Plus, Pencil, Trash2, Eye, EyeOff, Copy, RefreshCw } from "lucide-react
 import { api } from "../api.js";
 import Modal from "../components/Modal.jsx";
 
-const emptyForm = { name: "", location: "", description: "", active: true };
+const emptyForm = { name: "", location: "", description: "", active: true, mode: "auto" };
+
+const MODE_LABELS = { auto: "Automático", open: "Abierto", closed: "Cerrado", identify: "Identificación" };
 
 function formatLastSeen(value) {
   if (!value) return "Nunca";
@@ -37,7 +39,13 @@ export default function DoorsPage() {
   }
 
   function openEdit(door) {
-    setForm({ name: door.name, location: door.location || "", description: door.description || "", active: door.active });
+    setForm({
+      name: door.name,
+      location: door.location || "",
+      description: door.description || "",
+      active: door.active,
+      mode: door.mode || "auto",
+    });
     setError("");
     setEditing(door);
   }
@@ -98,6 +106,7 @@ export default function DoorsPage() {
               <th>API key (nodo)</th>
               <th>Últ. sincronización</th>
               <th>Estado</th>
+              <th>Modo</th>
               <th></th>
             </tr>
           </thead>
@@ -127,6 +136,7 @@ export default function DoorsPage() {
                 <td>
                   <span className={`badge ${d.active ? "badgeSuccess" : "badgeMuted"}`}>{d.active ? "Activa" : "Bloqueada"}</span>
                 </td>
+                <td className="muted">{MODE_LABELS[d.mode] || d.mode || "Automático"}</td>
                 <td className="rowActions">
                   <button type="button" className="iconBtn" onClick={() => openEdit(d)}>
                     <Pencil size={16} />
@@ -139,7 +149,7 @@ export default function DoorsPage() {
             ))}
             {doors.length === 0 && (
               <tr>
-                <td colSpan={6} className="muted">
+                <td colSpan={7} className="muted">
                   No hay puertas todavía.
                 </td>
               </tr>
@@ -168,6 +178,18 @@ export default function DoorsPage() {
               <input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} />
               Activa (desactivarla bloquea todos los accesos en el siguiente sync del nodo)
             </label>
+            {editing.id && (
+              <label>
+                Modo
+                <select value={form.mode} onChange={(e) => setForm({ ...form, mode: e.target.value })}>
+                  {Object.entries(MODE_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             {!editing.id && <p className="hint">Se generará una API key para el nodo al guardar — configúrala en el firmware del ESP32.</p>}
             <div className="formActions">
               <button type="button" className="btn" onClick={() => setEditing(null)}>

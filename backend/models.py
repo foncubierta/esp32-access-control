@@ -44,6 +44,7 @@ class Door(SQLModel, table=True):
     description: Optional[str] = None
     api_key: str = Field(index=True, unique=True)
     active: bool = Field(default=True)
+    mode: str = Field(default="auto")  # auto | open | closed | identify — set from the guard view
     last_seen: Optional[datetime] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -66,7 +67,8 @@ class AccessLog(SQLModel, table=True):
     door_id: int = Field(foreign_key="door.id", index=True)
     credential_id: Optional[int] = Field(default=None, foreign_key="credential.id", index=True)
     raw_value_hash: Optional[str] = None  # kept even when credential is unknown, for audit
-    result: str  # granted | denied
+    result: str  # granted | denied — whether the credential itself would have had access
     reason: Optional[str] = None  # unknown_credential | inactive | expired | schedule | no_permission | door_inactive
+    door_mode: Optional[str] = None  # auto | open | closed | identify — what the door was set to when this happened
     event_time: datetime
     received_at: datetime = Field(default_factory=datetime.utcnow)
