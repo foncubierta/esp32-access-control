@@ -38,7 +38,7 @@ fi
 
 echo "==> Código"
 if [[ -d "$INSTALL_DIR/.git" ]]; then
-  sudo -u "$APP_USER" git -C "$INSTALL_DIR" pull
+  runuser -u "$APP_USER" -- git -C "$INSTALL_DIR" pull
 else
   rm -rf "$INSTALL_DIR"
   git clone "$REPO_URL" "$INSTALL_DIR"
@@ -49,9 +49,9 @@ BACKEND_DIR="$INSTALL_DIR/backend"
 FRONTEND_DIR="$INSTALL_DIR/frontend"
 
 echo "==> Backend: entorno virtual + dependencias"
-sudo -u "$APP_USER" python3 -m venv "$BACKEND_DIR/.venv"
-sudo -u "$APP_USER" "$BACKEND_DIR/.venv/bin/pip" install --quiet --upgrade pip
-sudo -u "$APP_USER" "$BACKEND_DIR/.venv/bin/pip" install --quiet -r "$BACKEND_DIR/requirements.txt"
+runuser -u "$APP_USER" -- python3 -m venv "$BACKEND_DIR/.venv"
+runuser -u "$APP_USER" -- "$BACKEND_DIR/.venv/bin/pip" install --quiet --upgrade pip
+runuser -u "$APP_USER" -- "$BACKEND_DIR/.venv/bin/pip" install --quiet -r "$BACKEND_DIR/requirements.txt"
 
 ENV_FILE="$BACKEND_DIR/.env"
 if [[ -f "$ENV_FILE" ]]; then
@@ -95,8 +95,8 @@ systemctl enable --now access-control-backend
 systemctl restart access-control-backend
 
 echo "==> Frontend: build"
-sudo -u "$APP_USER" npm install --prefix "$FRONTEND_DIR" --silent
-sudo -u "$APP_USER" npm run build --prefix "$FRONTEND_DIR" --silent
+runuser -u "$APP_USER" -- npm install --prefix "$FRONTEND_DIR" --silent
+runuser -u "$APP_USER" -- npm run build --prefix "$FRONTEND_DIR" --silent
 
 echo "==> nginx"
 cp "$INSTALL_DIR/deploy/nginx.conf" /etc/nginx/sites-available/access-control
