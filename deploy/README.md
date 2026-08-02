@@ -4,6 +4,32 @@ Despliegue nativo con systemd + nginx — sin Docker. Pensado para un LXC
 (p.ej. de Proxmox) ya creado y con red hacia la LAN donde estarán los
 nodos ESP32.
 
+## Vía rápida: script
+
+```bash
+git clone https://github.com/foncubierta/esp32-access-control.git
+cd esp32-access-control
+sudo ./deploy/setup.sh
+```
+
+Hace todo lo de este documento: instala paquetes, crea el usuario del
+sistema, monta el venv del backend, genera `.env` (con `SECRET_KEY`
+aleatoria y una contraseña de admin que te imprime al final si no le pasas
+una), levanta el servicio systemd, compila el frontend y configura nginx.
+Es **idempotente** — puedes volver a ejecutarlo tras un cambio en el repo
+(hace `git pull`, reinstala dependencias, recompila el frontend y reinicia
+el servicio) sin que te machaque el `.env` ya existente.
+
+Variables opcionales (por si tu instalación no encaja con los valores por
+defecto):
+
+```bash
+sudo ADMIN_PASSWORD='miContraseña' INSTALL_DIR=/opt/access-control APP_USER=accesscontrol ./deploy/setup.sh
+```
+
+El resto de este documento son los mismos pasos a mano, por si prefieres
+ir uno a uno o algo falla y quieres depurarlo.
+
 ## 1. Paquetes del sistema
 
 ```bash
