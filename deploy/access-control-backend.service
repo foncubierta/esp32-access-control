@@ -1,0 +1,22 @@
+[Unit]
+Description=ESP32 Access Control backend (FastAPI/uvicorn)
+After=network.target
+
+[Service]
+Type=simple
+User=access-control
+Group=access-control
+WorkingDirectory=/opt/esp32-access-control/backend
+EnvironmentFile=/opt/esp32-access-control/backend/.env
+ExecStart=/opt/esp32-access-control/backend/.venv/bin/uvicorn main:app --host 127.0.0.1 --port 8010
+Restart=on-failure
+RestartSec=3
+
+# Basic sandboxing — the service only needs to read the repo and write to data/
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/esp32-access-control/backend/data
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

@@ -47,6 +47,13 @@ El nodo separa la **decisión de acceso** (¿tendría paso esta credencial?) de 
 
 Esa misma página tiene un botón **"Abrir ahora"** independiente de los modos: dispara el relé una vez, en el momento, sin pasar tarjeta (`POST /api/doors/:id/trigger`). El nodo lo detecta por el mismo poll de `/api/node/mode` (campo `trigger_seq`, que sube en cada clic) y lo registra en el log con `reason=manual_trigger`.
 
+## Desplegar en un LXC
+
+Ver [`deploy/README.md`](deploy/README.md) — instrucciones paso a paso para Debian 12,
+con systemd para el backend y nginx sirviendo el frontend + haciendo de
+proxy hacia `/api/` (mismo origen para el navegador y para los nodos ESP32,
+que solo necesitan apuntar a la IP del LXC).
+
 ## Correr en local (desarrollo)
 
 ### Backend
