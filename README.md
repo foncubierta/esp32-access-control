@@ -22,6 +22,24 @@ Un control de acceso físico no puede depender de que la red esté viva en el mo
 
 El valor bruto de una credencial (UID de tarjeta, PIN...) **nunca se persiste**. Se guarda solo su hash SHA-256 (`Credential.value_hash`). El endpoint de sync (`/api/node/sync`) también entrega el hash, no el valor — el nodo hashea localmente lo que lee del lector y compara hashes.
 
+### Dar de alta una tarjeta desde el panel ("Leer tarjeta")
+
+En **Credenciales > Nueva credencial**, el botón "Leer tarjeta" evita tener
+que ir al monitor serie del nodo: eliges qué puerta usar como lector,
+arma una sesión de un solo uso (`POST /api/doors/:id/enroll/arm`), y en
+cuanto alguien pasa una tarjeta por esa puerta el nodo reporta el valor
+crudo una vez (`POST /api/node/enroll`) — el panel lo recoge por polling
+(cada 1s, hasta 30s) y rellena el campo "Valor" solo.
+
+Esto es una excepción deliberada y acotada al principio de arriba: el
+valor crudo viaja del nodo al backend y se muestra una vez en el
+navegador, pero **nunca se escribe en la base de datos** — vive solo en
+memoria del proceso (`backend/enrollment.py`) mientras dura la sesión de
+lectura, y se descarta al capturarse o a los 60s. En la práctica no es más
+exposición que la que ya existe hoy: el admin ya manda el valor en claro
+por HTTP al crear la credencial a mano; esto solo automatiza el paso de
+copiarlo del monitor serie.
+
 ## Modelo de datos
 
 - **User**: persona que puede tener credenciales.

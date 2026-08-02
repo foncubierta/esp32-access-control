@@ -16,9 +16,17 @@ hashea y se compara, igual para cualquier lector. Para tramas de 26 bits
 además se decodifica Facility Code/Card Number, solo a efectos de mostrarlo
 por Serial (el matching real siempre usa el valor crudo).
 
-### Dar de alta una credencial nueva (modo aprendizaje)
+### Dar de alta una credencial nueva
 
-Como el admin no puede adivinar el valor de una tarjeta antes de leerla:
+**Vía normal — botón "Leer tarjeta"** en Credenciales > Nueva credencial del
+panel web: elige esta puerta como lector, pasa la tarjeta, y el valor
+aparece solo. Por debajo, el nodo detecta `enroll_armed=true` en su
+siguiente poll de `/api/node/mode` (cada 2s) y, en el próximo escaneo,
+reporta el valor crudo a `POST /api/node/enroll` — no afecta ni al relé ni
+a la decisión de acceso normal, es un reporte aparte y de un solo uso.
+
+**Vía monitor serie** (si no tienes el nodo alcanzable desde el panel en
+ese momento, o prefieres hacerlo así):
 
 1. Conecta el nodo por USB y abre el monitor serie (`pio device monitor`).
 2. Pasa la tarjeta por el lector. Verás una línea `[card] ... raw=W26:0A3F91 ...`.

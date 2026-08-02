@@ -63,6 +63,9 @@ export const api = {
     update: (id, body) => req(`/doors/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
     rotateKey: (id) => req(`/doors/${id}/rotate-key`, { method: "POST" }),
     trigger: (id) => req(`/doors/${id}/trigger`, { method: "POST" }),
+    armEnroll: (id) => req(`/doors/${id}/enroll/arm`, { method: "POST" }),
+    enrollStatus: (id) => req(`/doors/${id}/enroll/status`),
+    disarmEnroll: (id) => req(`/doors/${id}/enroll`, { method: "DELETE" }),
     delete: (id) => req(`/doors/${id}`, { method: "DELETE" }),
   },
   permissions: {

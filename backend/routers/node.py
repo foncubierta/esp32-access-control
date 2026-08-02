@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
+import enrollment
 from database import get_session
 from models import Door, Credential, Permission, AccessLog
 from dependencies import get_current_door
@@ -27,6 +28,7 @@ class SyncResponse(BaseModel):
     door_active: bool
     door_mode: str
     trigger_seq: int
+    enroll_armed: bool
     generated_at: datetime
     credentials: List[SyncCredential]
 
@@ -69,6 +71,7 @@ def sync(door: Door = Depends(get_current_door), session: Session = Depends(get_
         door_active=door.active,
         door_mode=door.mode,
         trigger_seq=door.trigger_seq,
+        enroll_armed=enrollment.is_armed(door.id),
         generated_at=datetime.now(timezone.utc),
         credentials=credentials,
     )
@@ -79,6 +82,7 @@ class ModeResponse(BaseModel):
     door_active: bool
     door_mode: str
     trigger_seq: int
+    enroll_armed: bool
 
 
 @router.get("/mode", response_model=ModeResponse)
@@ -88,8 +92,16 @@ def get_mode(door: Door = Depends(get_current_door)):
     without re-fetching the whole credential list on every check the way
     /sync does. trigger_seq lets the node detect a manual "open now" click:
     it bumps on every POST /api/doors/:id/trigger, and the node fires a
-    single pulse whenever it sees the value change since its last poll."""
-    return ModeResponse(door_id=door.id, door_active=door.active, door_mode=door.mode, trigger_seq=door.trigger_seq)
+    single pulse whenever it sees the value change since its last poll.
+    enroll_armed tells it to report the very next card it reads verbatim to
+    POST /api/node/enroll, for the "Leer tarjeta" button on Credenciales."""
+    return ModeResponse(
+        door_id=door.id,
+        door_active=door.active,
+        door_mode=door.mode,
+        trigger_seq=door.trigger_seq,
+        enroll_armed=enrollment.is_armed(door.id),
+    )
 
 
 class LogEntry(BaseModel):
@@ -125,6 +137,22 @@ def upload_logs(
         )
     session.commit()
     return {"ok": True, "received": len(body.entries)}
+
+
+class EnrollReport(BaseModel):
+    value: str  # raw canonical value, e.g. "W26:0A3F91" — never stored, just relayed
+    bit_count: Optional[int] = None
+
+
+@router.post("/enroll")
+def report_enrollment(body: EnrollReport, door: Door = Depends(get_current_door)):
+    """The node calls this once, right after reading a card while
+    enroll_armed was true. Held in memory only (see enrollment.py) for the
+    admin's browser to pick up via GET /api/doors/:id/enroll/status —
+    dropped silently if nothing is actually armed (session expired, admin
+    already cancelled, etc.)."""
+    enrollment.report(door.id, body.value, body.bit_count)
+    return {"ok": True}
 
 
 @router.post("/heartbeat")

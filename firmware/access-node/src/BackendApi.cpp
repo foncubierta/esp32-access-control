@@ -82,6 +82,7 @@ bool BackendApi::sync() {
   Access.setDoorActive(doorActive);
   Access.setMode(String(doorMode));
   Access.setTriggerSeq(doc["trigger_seq"] | 0);
+  Access.setEnrollArmed(doc["enroll_armed"] | false);
   Serial.printf("[api] sync OK — %u credential(s) cached, door_active=%d, mode=%s\n", (unsigned)count, doorActive,
                 doorMode);
   return true;
@@ -103,6 +104,7 @@ bool BackendApi::syncMode() {
   Access.setDoorActive(doc["door_active"] | true);
   Access.setMode(String((const char *)(doc["door_mode"] | "auto")));
   Access.setTriggerSeq(doc["trigger_seq"] | 0);
+  Access.setEnrollArmed(doc["enroll_armed"] | false);
   return true;
 }
 
@@ -140,6 +142,23 @@ bool BackendApi::uploadLogs() {
   }
   Serial.printf("[api] log upload failed, HTTP %d — will retry next cycle\n", resp.statusCode);
   return false;
+}
+
+bool BackendApi::reportEnrollment(const String &rawValue, uint8_t bitCount) {
+  if (!Network.isConnected()) return false;
+
+  String host;
+  uint16_t port;
+  if (!parseHostPort(Network.config().backendUrl, host, port)) return false;
+
+  JsonDocument doc;
+  doc["value"] = rawValue;
+  doc["bit_count"] = bitCount;
+  String body;
+  serializeJson(doc, body);
+
+  HttpResponse resp = SimpleHttp::request(Network.client(), host, port, "/api/node/enroll", "POST", Network.config().apiKey, body);
+  return resp.statusCode == 200;
 }
 
 bool BackendApi::heartbeat() {

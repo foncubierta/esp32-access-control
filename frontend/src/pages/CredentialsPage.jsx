@@ -1,10 +1,12 @@
-import { useState, useEffect, useCallback } from "react";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { Plus, Pencil, Trash2, Scan } from "lucide-react";
 import { api } from "../api.js";
 import Modal from "../components/Modal.jsx";
 
 const emptyForm = { user_id: "", type: "rfid", label: "", value: "", active: true, valid_from: "", valid_until: "" };
 const TYPE_LABELS = { rfid: "RFID", pin: "PIN", nfc: "NFC" };
+const ENROLL_POLL_MS = 1000;
+const ENROLL_TIMEOUT_MS = 30000;
 
 export default function CredentialsPage() {
   const [credentials, setCredentials] = useState([]);
@@ -13,6 +15,12 @@ export default function CredentialsPage() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState("");
+  const [doors, setDoors] = useState([]);
+  const [enrollDoorId, setEnrollDoorId] = useState("");
+  const [enrolling, setEnrolling] = useState(false);
+  const [enrollMessage, setEnrollMessage] = useState("");
+  const enrollPollRef = useRef(null);
+  const enrollTimeoutRef = useRef(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -27,15 +35,81 @@ export default function CredentialsPage() {
 
   useEffect(load, [load]);
 
+  useEffect(() => {
+    api.doors.list().then((ds) => {
+      setDoors(ds);
+      setEnrollDoorId((current) => current || (ds[0] ? String(ds[0].id) : ""));
+    });
+  }, []);
+
+  useEffect(() => () => stopEnrollPolling(), []);
+
   const userName = (id) => users.find((u) => u.id === id)?.full_name || `#${id}`;
 
+  function stopEnrollPolling() {
+    clearInterval(enrollPollRef.current);
+    clearTimeout(enrollTimeoutRef.current);
+    enrollPollRef.current = null;
+    enrollTimeoutRef.current = null;
+  }
+
+  function cancelEnroll() {
+    const wasArmed = enrolling;
+    stopEnrollPolling();
+    setEnrolling(false);
+    setEnrollMessage("");
+    if (wasArmed && enrollDoorId) {
+      api.doors.disarmEnroll(enrollDoorId).catch(() => {});
+    }
+  }
+
+  async function startEnroll() {
+    if (!enrollDoorId || enrolling) return;
+    setEnrollMessage("");
+    try {
+      await api.doors.armEnroll(enrollDoorId);
+    } catch (err) {
+      setEnrollMessage(err.message);
+      return;
+    }
+    setEnrolling(true);
+    setEnrollMessage("Pasa la tarjeta por el lector...");
+    enrollPollRef.current = setInterval(async () => {
+      try {
+        const status = await api.doors.enrollStatus(enrollDoorId);
+        if (status.captured) {
+          stopEnrollPolling();
+          setForm((f) => ({ ...f, value: status.captured.value }));
+          setEnrolling(false);
+          setEnrollMessage(`Tarjeta leída: ${status.captured.value}`);
+          api.doors.disarmEnroll(enrollDoorId).catch(() => {});
+        }
+      } catch {
+        // transient poll error — keep trying until the timeout below
+      }
+    }, ENROLL_POLL_MS);
+    enrollTimeoutRef.current = setTimeout(() => {
+      stopEnrollPolling();
+      setEnrolling(false);
+      setEnrollMessage("No se detectó ninguna tarjeta — inténtalo de nuevo.");
+      api.doors.disarmEnroll(enrollDoorId).catch(() => {});
+    }, ENROLL_TIMEOUT_MS);
+  }
+
+  function closeModal() {
+    cancelEnroll();
+    setEditing(null);
+  }
+
   function openCreate() {
+    cancelEnroll();
     setForm(emptyForm);
     setError("");
     setEditing({});
   }
 
   function openEdit(cred) {
+    cancelEnroll();
     setForm({
       user_id: cred.user_id,
       type: cred.type,
@@ -68,7 +142,7 @@ export default function CredentialsPage() {
         if (!payload.value) throw new Error("Introduce el valor de la credencial (UID/PIN)");
         await api.credentials.create(payload);
       }
-      setEditing(null);
+      closeModal();
       load();
     } catch (err) {
       setError(err.message);
@@ -144,7 +218,7 @@ export default function CredentialsPage() {
       )}
 
       {editing && (
-        <Modal title={editing.id ? "Editar credencial" : "Nueva credencial"} onClose={() => setEditing(null)}>
+        <Modal title={editing.id ? "Editar credencial" : "Nueva credencial"} onClose={closeModal}>
           <form className="form" onSubmit={save}>
             {error && <p className="formError">{error}</p>}
             {!editing.id && (
@@ -180,6 +254,27 @@ export default function CredentialsPage() {
               {editing.id ? "Nuevo valor (dejar vacío para no cambiar)" : "Valor (UID de la tarjeta o PIN)"}
               <input value={form.value} onChange={(e) => setForm({ ...form, value: e.target.value })} placeholder={editing.id ? "sin cambios" : ""} />
             </label>
+            {form.type !== "pin" && doors.length > 0 && (
+              <div className="enrollRow">
+                <select value={enrollDoorId} onChange={(e) => setEnrollDoorId(e.target.value)} disabled={enrolling}>
+                  {doors.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
+                {enrolling ? (
+                  <button type="button" className="btn" onClick={cancelEnroll}>
+                    Cancelar lectura
+                  </button>
+                ) : (
+                  <button type="button" className="btn" onClick={startEnroll}>
+                    <Scan size={16} /> Leer tarjeta
+                  </button>
+                )}
+                {enrollMessage && <span className="enrollMessage">{enrollMessage}</span>}
+              </div>
+            )}
             <div className="formGrid">
               <label>
                 Válida desde
@@ -195,7 +290,7 @@ export default function CredentialsPage() {
               Activa
             </label>
             <div className="formActions">
-              <button type="button" className="btn" onClick={() => setEditing(null)}>
+              <button type="button" className="btn" onClick={closeModal}>
                 Cancelar
               </button>
               <button type="submit" className="btn btnPrimary">

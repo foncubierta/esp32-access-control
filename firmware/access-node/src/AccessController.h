@@ -50,6 +50,12 @@ class AccessController {
   void setTriggerSeq(int32_t seq) { _triggerSeq = seq; }
   int32_t triggerSeq() const { return _triggerSeq; }
 
+  // True while the admin's "Leer tarjeta" button is waiting on this door's
+  // reader. main.cpp reports the next raw scan to the backend when this is
+  // set — see checkManualTrigger()'s sibling in main.cpp for the flow.
+  void setEnrollArmed(bool armed) { _enrollArmed = armed; }
+  bool enrollArmed() const { return _enrollArmed; }
+
   AccessDecision evaluate(const String &valueHash) const;
 
  private:
@@ -58,6 +64,7 @@ class AccessController {
   bool _doorActive = true;
   String _mode = "auto";
   int32_t _triggerSeq = 0;
+  bool _enrollArmed = false;
 };
 
 extern AccessController Access;

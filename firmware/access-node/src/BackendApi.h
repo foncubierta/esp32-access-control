@@ -1,4 +1,5 @@
 #pragma once
+#include <Arduino.h>
 
 namespace BackendApi {
 
@@ -16,6 +17,11 @@ bool syncMode();
 // POST /api/node/logs — uploads a batch of pending events and only acks
 // them out of the queue once the server confirms receipt.
 bool uploadLogs();
+
+// POST /api/node/enroll — reports a raw card value read while
+// enroll_armed was set, for the admin panel's "Leer tarjeta" button.
+// Best-effort, fire-and-forget: nothing local depends on it succeeding.
+bool reportEnrollment(const String &rawValue, uint8_t bitCount);
 
 // POST /api/node/heartbeat
 bool heartbeat();

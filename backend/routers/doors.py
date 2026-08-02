@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
+import enrollment
 from database import get_session
 from models import Door, Permission
 from dependencies import get_current_admin
@@ -87,6 +88,36 @@ def trigger_door(door_id: int, session: Session = Depends(get_session)):
     session.commit()
     session.refresh(door)
     return door
+
+
+@router.post("/{door_id}/enroll/arm")
+def arm_enroll(door_id: int, session: Session = Depends(get_session)):
+    """Arms a one-shot "read the next card" session for this door's reader.
+    The node picks this up on its next mode poll (a few seconds) and, on
+    the very next scan, reports the raw value back — see enrollment.py for
+    why this doesn't touch the database."""
+    door = session.get(Door, door_id)
+    if not door:
+        raise HTTPException(status_code=404, detail="Door not found")
+    enrollment.arm(door_id)
+    return {"ok": True}
+
+
+@router.get("/{door_id}/enroll/status")
+def enroll_status(door_id: int, session: Session = Depends(get_session)):
+    door = session.get(Door, door_id)
+    if not door:
+        raise HTTPException(status_code=404, detail="Door not found")
+    return enrollment.status(door_id)
+
+
+@router.delete("/{door_id}/enroll")
+def disarm_enroll(door_id: int, session: Session = Depends(get_session)):
+    door = session.get(Door, door_id)
+    if not door:
+        raise HTTPException(status_code=404, detail="Door not found")
+    enrollment.disarm(door_id)
+    return {"ok": True}
 
 
 @router.delete("/{door_id}")

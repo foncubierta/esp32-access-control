@@ -57,9 +57,10 @@ void handleCardScan() {
   if (bitCount == 26) Serial.printf(" (26-bit FC=%u CN=%lu)", facility, (unsigned long)card);
   if (decision.reason) Serial.printf(" reason=%s", decision.reason);
   Serial.printf(" mode=%s relay=%s\n", mode.c_str(), pulseRelay ? "FIRED" : "no");
-  // ^ This is also how you enroll a new card: badge it here, copy the raw
-  // value printed above, and paste it into the credential's "Value" field
-  // in the admin panel (Credenciales > Nueva credencial).
+  // ^ Enrolling a new card is normally done from the admin panel's "Leer
+  // tarjeta" button (Credenciales > Nueva credencial) — see the
+  // enrollArmed block below. This raw value printed to Serial is the
+  // fallback for when you don't have that handy.
 
   // Fire the relay before any network I/O — a slow or unreachable backend
   // must never delay the physical door action.
@@ -81,6 +82,13 @@ void handleCardScan() {
   // to that periodic flush if this fails (offline), so nothing is lost.
   if (Network.isConnected()) {
     BackendApi::uploadLogs();
+  }
+
+  // Doesn't affect the access decision or the relay at all — purely an
+  // additional, best-effort side report for the admin's "Leer tarjeta"
+  // button, only sent while a session is actually armed.
+  if (Access.enrollArmed() && Network.isConnected()) {
+    BackendApi::reportEnrollment(rawValue, bitCount);
   }
 }
 
