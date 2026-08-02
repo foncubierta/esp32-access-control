@@ -26,7 +26,7 @@ fi
 
 echo "==> Paquetes del sistema"
 apt-get update -y
-apt-get install -y python3 python3-venv python3-pip nodejs npm nginx git openssl
+apt-get install -y python3 python3-venv python3-pip nodejs npm nginx git openssl curl
 
 echo "==> Usuario del sistema"
 if ! id "$APP_USER" &>/dev/null; then
