@@ -473,31 +473,35 @@ void NetworkManager::begin() {
     forcePortal = (millis() - start >= CONFIG_BUTTON_HOLD_MS);
   }
 
-  // Only actual WiFi credentials gate the AP portal — RuntimeConfig::isValid()
-  // (backend URL + API key) deliberately does NOT, otherwise a blank API
-  // key would trap the node in AP mode forever, since it'd never reach
-  // connectWifi() to even become reachable on the LAN. Backend URL, API
-  // key, sync/pulse/TZ/label and the wiring pins all have safe defaults or
-  // tolerate being blank for now — the intended flow is: set WiFi here
-  // once, then finish the rest from the LAN portal once it's reachable at
-  // its real address (see NetworkManager's class comment / the README).
-  bool needsWifiCreds = false;
-  if (_cfg.connMode == ConnMode::WIFI) {
-    WiFi.mode(WIFI_STA);  // lets WiFi.SSID() read back whatever's already persisted, without connecting yet
-    needsWifiCreds = (WiFi.SSID().length() == 0);
+  if (_cfg.connMode == ConnMode::ETHERNET) {
+    if (forcePortal) runConfigPortal();  // blocks, then reboots — never returns normally
+    connectEthernet();
+    if (Ethernet.linkStatus() != LinkOFF) startEthConfigServer();
+    return;
   }
 
-  if (needsWifiCreds || forcePortal) {
+  // WiFi mode: always attempt a real connect with whatever's already saved
+  // before assuming the AP portal is needed. An earlier version of this
+  // check tried to "peek" at WiFi.SSID() right after WiFi.mode(WIFI_STA)
+  // to decide without actually connecting — that proved unreliable on
+  // real hardware (read back empty immediately after a config that had
+  // just been saved and rebooted into, sending the node straight back
+  // into AP mode forever). A real connectWifi() attempt doesn't have that
+  // problem — it's the same connect path used everywhere else here,
+  // already proven to work — at the cost of it blocking for its usual
+  // (up to ~20s) timeout on a genuinely blank node before falling back to
+  // the AP, same as it always has post-portal.
+  //
+  // RuntimeConfig::isValid() (backend URL + API key) deliberately plays no
+  // part in this decision, so a blank API key can never trap the node in
+  // AP mode — see startWebConfigPortal()/the README for the intended
+  // "WiFi here, everything else from the LAN portal" flow.
+  if (!forcePortal) connectWifi();
+  if (forcePortal || WiFi.status() != WL_CONNECTED) {
     runConfigPortal();  // blocks, then reboots — never returns normally
   }
 
-  if (_cfg.connMode == ConnMode::ETHERNET) {
-    connectEthernet();
-    if (Ethernet.linkStatus() != LinkOFF) startEthConfigServer();
-  } else {
-    connectWifi();
-    if (WiFi.status() == WL_CONNECTED) startWebConfigPortal();
-  }
+  startWebConfigPortal();  // only reached once WiFi.status() == WL_CONNECTED
 }
 
 void NetworkManager::loop() {
