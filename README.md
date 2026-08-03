@@ -45,7 +45,7 @@ copiarlo del monitor serie.
 - **User**: persona que puede tener credenciales. Incluye ficha tipo carnet: `dni`, `address`, `photo_path` (foto servida vía `/api/users/:id/photo`, JWT-protegida).
 - **Credential**: una tarjeta/PIN/tag de un usuario (tipo `rfid` | `pin` | `nfc`), con validez opcional (`valid_from` / `valid_until`). Puede pertenecer a un `CredentialGroup` (`group_id`, opcional).
 - **CredentialGroup**: perfil de acceso con nombre (VIP, Mantenimiento, Zona A...). Se gestiona en **Grupos**.
-- **Door**: una puerta/cancela física = un nodo ESP32, con su propia `api_key`.
+- **Door**: una puerta/cancela física = un nodo ESP32, con su propia `api_key`. `last_seen` se actualiza en cada `/api/node/sync` y `/api/node/heartbeat` (el nodo manda heartbeat cada 60s fijos); la API expone además `online` (calculado al vuelo, `last_seen` de menos de 120s — el doble del heartbeat, para tolerar un fallo puntual sin parpadear) — así **Puertas/Nodos** y **Vigilancia** muestran si el ESP32 de esa puerta está realmente conectado ahora mismo, no solo la fecha de la última vez que se le vio.
 - **Permission**: acceso suelto de UNA `Credential` a UNA `Door`, con horario opcional (`days_of_week`, `time_start`, `time_end`). Sin horario = acceso permitido en cualquier momento.
 - **GroupPermission**: igual que `Permission` pero a nivel de `CredentialGroup` — da acceso a esa puerta a *todas* las credenciales activas del grupo.
 - **AccessLog**: eventos de apertura/denegación subidos por los nodos, para auditoría. Incluye `door_mode`: en qué modo estaba la puerta cuando ocurrió, independientemente de si la credencial en sí tenía o no acceso (`result`).
@@ -175,7 +175,7 @@ POST   /api/groups/permissions      Dar acceso a un grupo ({ group_id, door_id, 
 PATCH  /api/groups/permissions/:id   Editar / activar / desactivar
 DELETE /api/groups/permissions/:id   Quitar el acceso
 
-GET    /api/doors                   Listar puertas/nodos
+GET    /api/doors                   Listar puertas/nodos (cada una con online: bool, calculado — no se guarda)
 POST   /api/doors                   Crear puerta (genera api_key)
 PATCH  /api/doors/:id                Editar puerta (incluye mode: auto|open|closed|identify)
 POST   /api/doors/:id/rotate-key     Regenerar api_key del nodo

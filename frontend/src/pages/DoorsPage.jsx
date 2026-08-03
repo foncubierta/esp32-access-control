@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Pencil, Trash2, Eye, EyeOff, Copy, RefreshCw } from "lucide-react";
+import { Plus, Pencil, Trash2, Eye, EyeOff, Copy, RefreshCw, Wifi, WifiOff } from "lucide-react";
 import { api } from "../api.js";
 import Modal from "../components/Modal.jsx";
 
 const emptyForm = { name: "", location: "", description: "", active: true, mode: "auto" };
 
 const MODE_LABELS = { auto: "Automático", open: "Abierto", closed: "Cerrado", identify: "Identificación" };
+const DOORS_POLL_MS = 15000;
 
 function formatLastSeen(value) {
   if (!value) return "Nunca";
@@ -31,6 +32,13 @@ export default function DoorsPage() {
   }, []);
 
   useEffect(load, [load]);
+
+  // Keeps "En línea"/"Sin conexión" current without the loading flicker a
+  // full load() would cause every 15s.
+  useEffect(() => {
+    const t = setInterval(() => api.doors.list().then(setDoors).catch(() => {}), DOORS_POLL_MS);
+    return () => clearInterval(t);
+  }, []);
 
   function openCreate() {
     setForm(emptyForm);
@@ -103,6 +111,7 @@ export default function DoorsPage() {
             <tr>
               <th>Nombre</th>
               <th>Ubicación</th>
+              <th>Conexión</th>
               <th>API key (nodo)</th>
               <th>Últ. sincronización</th>
               <th>Estado</th>
@@ -115,6 +124,12 @@ export default function DoorsPage() {
               <tr key={d.id}>
                 <td>{d.name}</td>
                 <td>{d.location || "—"}</td>
+                <td>
+                  <span className={`badge ${d.online ? "badgeSuccess" : "badgeDanger"}`}>
+                    {d.online ? <Wifi size={12} /> : <WifiOff size={12} />}
+                    {d.online ? "En línea" : "Sin conexión"}
+                  </span>
+                </td>
                 <td className="apiKeyCell">
                   <code>{revealed[d.id] ? d.api_key : "•".repeat(16)}</code>
                   <button
@@ -149,7 +164,7 @@ export default function DoorsPage() {
             ))}
             {doors.length === 0 && (
               <tr>
-                <td colSpan={7} className="muted">
+                <td colSpan={8} className="muted">
                   No hay puertas todavía.
                 </td>
               </tr>

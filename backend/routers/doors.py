@@ -1,4 +1,5 @@
 from typing import List, Optional
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session, select
@@ -21,6 +22,11 @@ DOOR_FIELD_LABELS = {
     "mode": "Modo",
 }
 
+# The node's heartbeat is the tightest guaranteed update to last_seen (fixed
+# 60s in the firmware, unlike the admin-configurable sync interval) — 2x
+# that tolerates one missed beat plus some jitter before flagging offline.
+ONLINE_THRESHOLD_S = 120
+
 
 def _validate_mode(mode: Optional[str]):
     if mode is not None and mode not in DOOR_MODES:
@@ -42,22 +48,49 @@ class DoorUpdate(BaseModel):
     mode: Optional[str] = None
 
 
-@router.get("", response_model=List[Door])
+class DoorOut(BaseModel):
+    id: int
+    name: str
+    location: Optional[str] = None
+    description: Optional[str] = None
+    api_key: str
+    active: bool
+    mode: str
+    trigger_seq: int
+    last_seen: Optional[datetime] = None
+    created_at: datetime
+    online: bool  # last_seen within ONLINE_THRESHOLD_S — not a stored column
+
+
+def _is_online(last_seen: Optional[datetime]) -> bool:
+    if last_seen is None:
+        return False
+    if last_seen.tzinfo is None:
+        last_seen = last_seen.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - last_seen).total_seconds() < ONLINE_THRESHOLD_S
+
+
+def _door_out(door: Door) -> DoorOut:
+    return DoorOut(**door.model_dump(), online=_is_online(door.last_seen))
+
+
+@router.get("", response_model=List[DoorOut])
 def list_doors(session: Session = Depends(get_session)):
-    return session.exec(select(Door).order_by(Door.name)).all()
+    doors = session.exec(select(Door).order_by(Door.name)).all()
+    return [_door_out(door) for door in doors]
 
 
-@router.post("", response_model=Door)
+@router.post("", response_model=DoorOut)
 def create_door(body: DoorCreate, admin: AdminUser = Depends(get_current_admin), session: Session = Depends(get_session)):
     door = Door(**body.model_dump(), api_key=generate_api_key())
     session.add(door)
     session.commit()
     session.refresh(door)
     audit.log(session, admin.username, "created", "door", f"Creó la puerta «{door.name}»", entity_id=door.id, entity_label=door.name)
-    return door
+    return _door_out(door)
 
 
-@router.patch("/{door_id}", response_model=Door)
+@router.patch("/{door_id}", response_model=DoorOut)
 def update_door(
     door_id: int, body: DoorUpdate, admin: AdminUser = Depends(get_current_admin), session: Session = Depends(get_session)
 ):
@@ -78,10 +111,10 @@ def update_door(
             session, admin.username, "updated", "door", f"Editó la puerta «{door.name}»",
             entity_id=door.id, entity_label=door.name, details=changes,
         )
-    return door
+    return _door_out(door)
 
 
-@router.post("/{door_id}/rotate-key", response_model=Door)
+@router.post("/{door_id}/rotate-key", response_model=DoorOut)
 def rotate_key(door_id: int, admin: AdminUser = Depends(get_current_admin), session: Session = Depends(get_session)):
     door = session.get(Door, door_id)
     if not door:
@@ -94,10 +127,10 @@ def rotate_key(door_id: int, admin: AdminUser = Depends(get_current_admin), sess
         session, admin.username, "key_rotated", "door", f"Rotó la API key de «{door.name}» (el nodo dejará de sincronizar hasta reconfigurarlo)",
         entity_id=door.id, entity_label=door.name,
     )
-    return door
+    return _door_out(door)
 
 
-@router.post("/{door_id}/trigger", response_model=Door)
+@router.post("/{door_id}/trigger", response_model=DoorOut)
 def trigger_door(door_id: int, admin: AdminUser = Depends(get_current_admin), session: Session = Depends(get_session)):
     """Guard-initiated one-off relay pulse, independent of mode/credentials.
     Bumps a counter the node picks up on its next mode poll (a few seconds
@@ -114,7 +147,7 @@ def trigger_door(door_id: int, admin: AdminUser = Depends(get_current_admin), se
         session, admin.username, "manual_trigger", "door", f"Envió una apertura manual a «{door.name}»",
         entity_id=door.id, entity_label=door.name,
     )
-    return door
+    return _door_out(door)
 
 
 @router.post("/{door_id}/enroll/arm")

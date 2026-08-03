@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { DoorOpen, DoorClosed, ScanEye, Zap, Unlock } from "lucide-react";
+import { DoorOpen, DoorClosed, ScanEye, Zap, Unlock, Wifi, WifiOff } from "lucide-react";
 import { api } from "../api.js";
 
 const MODES = [
@@ -116,13 +116,21 @@ export default function GuardPage() {
       <div className="pageHeader">
         <h1>Vigilancia</h1>
         {doors.length > 0 && (
-          <select value={doorId} onChange={(e) => setDoorId(e.target.value)}>
-            {doors.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-              </option>
-            ))}
-          </select>
+          <div className="guardDoorPicker">
+            <select value={doorId} onChange={(e) => setDoorId(e.target.value)}>
+              {doors.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+            {door && (
+              <span className={`badge ${door.online ? "badgeSuccess" : "badgeDanger"}`}>
+                {door.online ? <Wifi size={12} /> : <WifiOff size={12} />}
+                {door.online ? "En línea" : "Sin conexión"}
+              </span>
+            )}
+          </div>
         )}
       </div>
 
@@ -130,6 +138,11 @@ export default function GuardPage() {
         <p className="muted">No hay puertas configuradas todavía.</p>
       ) : (
         <>
+          {!door.online && (
+            <p className="offlineWarning">
+              Este nodo no ha dado señal en los últimos minutos — los cambios de modo y la apertura manual no llegarán hasta que vuelva a conectarse.
+            </p>
+          )}
           <div className="modeGrid">
             {MODES.map((m) => {
               const Icon = m.icon;
