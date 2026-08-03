@@ -75,11 +75,24 @@ export default function LicensePage() {
         <form className="form" onSubmit={install}>
           {error && <p className="formError">{error}</p>}
           <label>
+            Archivo de licencia (.lic)
+            <input
+              type="file"
+              accept=".lic,.txt,text/plain"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                setToken((await file.text()).trim());
+                e.target.value = "";
+              }}
+            />
+          </label>
+          <label>
             Token de licencia
             <textarea
               required
               rows={4}
-              placeholder="Pega aquí el token que te ha dado el proveedor"
+              placeholder="O pega aquí directamente el token que te ha dado el proveedor"
               value={token}
               onChange={(e) => setToken(e.target.value)}
             />
