@@ -107,15 +107,15 @@ pio run -t upload       # compila y flashea (ESP32 conectado por USB)
 pio device monitor      # monitor serie a 115200 baudios
 ```
 
-> **Nota:** este firmware se ha revisado a mano línea por línea pero **no
-> se ha podido compilar en este entorno** — la política de red del sandbox
-> bloquea el registro de paquetes de PlatformIO. Compílalo en tu máquina
-> antes de flashear. El punto más probable de fallo si tu toolchain resuelve
-> una versión antigua de mbedtls (anterior a la 3.x) es `CredentialHash.cpp`:
-> si `pio run` se queja de `mbedtls_sha256_starts`/`_update`/`_finish`,
-> añade el sufijo `_ret` a esas tres llamadas (`mbedtls_sha256_starts_ret`,
-> etc. — pasan a devolver `int`, comprueba que sea `0`). El resto del
-> fichero no cambia.
+> **Nota:** este firmware se compila con PlatformIO desde el servidor de
+> licencias (ver `esp32-access-control-licensing`, página "Firmware") o en
+> tu propia máquina — ya verificado compilando y flasheando en hardware
+> real. La política de red de *este* entorno de desarrollo (el asistente)
+> sigue bloqueando el registro de paquetes de PlatformIO, así que cualquier
+> cambio que se haga aquí sobre `NetworkManager.*` u otros ficheros del
+> firmware se revisa a mano pero no se compila en el propio entorno —
+> recompílalo (panel de licencias o `pio run` local) antes de flashear un
+> cambio nuevo.
 
 ## Primer arranque — portal cautivo
 
@@ -137,6 +137,28 @@ Si el nodo no tiene configuración guardada (o mantienes el botón de config
 
 Para reconfigurar un nodo ya desplegado (cambiar de WiFi, mover a otra
 puerta, etc.), mantén pulsado el botón de config 3 segundos al arrancar.
+
+## Reconfigurar sin AP ni botón — portal en la LAN
+
+En cuanto el nodo conecta por WiFi, el mismo formulario del portal queda
+disponible en su propia IP dentro de la LAN, sin necesidad de conectarte a
+ningún AP ni tocar el botón de config:
+
+1. Mira la IP del nodo en el log serie (`[net] WiFi connected, IP: ...` o
+   `[net] LAN config portal available at http://...`).
+2. Abre `http://<ip-del-nodo>/` desde cualquier equipo de esa misma red.
+3. Verás el mismo menú de WiFiManager que en el AP — "Configure WiFi" (para
+   cambiar de red) o el formulario de parámetros (backend, API key,
+   intervalo de sync, pulso del relé, TZ, etiqueta).
+4. Al guardar, el nodo aplica y persiste los cambios y reinicia solo a los
+   pocos segundos.
+
+Solo funciona en modo `wifi` (WiFiManager está construido sobre la pila
+WiFi del ESP32) — en modo `eth` sigue haciendo falta el botón+AP para
+reconfigurar. Puedes desactivar este portal LAN por completo poniendo
+`ENABLE_LAN_CONFIG_PORTAL false` en `include/config.h` si prefieres exigir
+siempre el botón físico para cualquier cambio. Es HTTP plano, igual que el
+resto de este firmware — pensado para quedarse dentro de la LAN.
 
 ## Modos de puerta y disparo manual
 

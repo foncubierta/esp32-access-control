@@ -39,44 +39,92 @@ void NetworkManager::saveConfig() {
   prefs.end();
 }
 
+// Plain text field instead of a <select> — WiFiManagerParameter doesn't
+// support real dropdowns, and hand-rolling one means poking at the
+// library's internal web server to read the posted value back out.
+// Called once from begin(), after loadConfig() — see the class comment on
+// _wm for why these can't be re-added on every portal open.
+void NetworkManager::setupParams() {
+  refreshParamBuffers();
+
+  _pMode = new WiFiManagerParameter("conn_mode", "Modo: 'wifi' o 'eth' (modulo W5500)", _bufMode, sizeof(_bufMode));
+  _pBackend = new WiFiManagerParameter("backend_url", "URL del backend (http://host:8010)", _bufBackend, sizeof(_bufBackend));
+  _pApiKey = new WiFiManagerParameter("api_key", "API key de esta puerta", _bufApiKey, sizeof(_bufApiKey));
+  _pSync = new WiFiManagerParameter("sync_s", "Intervalo de sync (segundos)", _bufSync, sizeof(_bufSync));
+  _pPulse = new WiFiManagerParameter("pulse_ms", "Duracion pulso rele (ms)", _bufPulse, sizeof(_bufPulse));
+  _pTz = new WiFiManagerParameter("tz", "TZ POSIX (ver nayarsystems/posix_tz_db)", _bufTz, sizeof(_bufTz));
+  _pLabel = new WiFiManagerParameter("label", "Etiqueta del nodo (opcional)", _bufLabel, sizeof(_bufLabel));
+
+  _wm.addParameter(_pMode);
+  _wm.addParameter(_pBackend);
+  _wm.addParameter(_pApiKey);
+  _wm.addParameter(_pSync);
+  _wm.addParameter(_pPulse);
+  _wm.addParameter(_pTz);
+  _wm.addParameter(_pLabel);
+}
+
+// Re-fills the buffers WiFiManagerParameter points at (from current _cfg,
+// falling back to the compiled defaults for anything unset) and pushes them
+// into the already-added parameters via setValue() — so whichever portal
+// gets opened next (AP or LAN) shows what's actually configured right now,
+// not whatever was on screen the first time setupParams() ran.
+void NetworkManager::refreshParamBuffers() {
+  strncpy(_bufMode, _cfg.connMode == ConnMode::ETHERNET ? "eth" : "wifi", sizeof(_bufMode));
+  strncpy(_bufBackend, _cfg.backendUrl.length() ? _cfg.backendUrl.c_str() : DEFAULT_BACKEND_URL, sizeof(_bufBackend));
+  strncpy(_bufApiKey, _cfg.apiKey.c_str(), sizeof(_bufApiKey));
+  snprintf(_bufSync, sizeof(_bufSync), "%u", _cfg.syncIntervalS ? _cfg.syncIntervalS : DEFAULT_SYNC_INTERVAL_S);
+  snprintf(_bufPulse, sizeof(_bufPulse), "%u", _cfg.relayPulseMs ? _cfg.relayPulseMs : DEFAULT_RELAY_PULSE_MS);
+  strncpy(_bufTz, _cfg.tz.length() ? _cfg.tz.c_str() : DEFAULT_TZ, sizeof(_bufTz));
+  strncpy(_bufLabel, _cfg.doorLabel.c_str(), sizeof(_bufLabel));
+
+  if (_pMode) {
+    _pMode->setValue(_bufMode, sizeof(_bufMode));
+    _pBackend->setValue(_bufBackend, sizeof(_bufBackend));
+    _pApiKey->setValue(_bufApiKey, sizeof(_bufApiKey));
+    _pSync->setValue(_bufSync, sizeof(_bufSync));
+    _pPulse->setValue(_bufPulse, sizeof(_bufPulse));
+    _pTz->setValue(_bufTz, sizeof(_bufTz));
+    _pLabel->setValue(_bufLabel, sizeof(_bufLabel));
+  }
+}
+
+void NetworkManager::applyParamsToConfig() {
+  String modeValue = String(_pMode->getValue());
+  modeValue.toLowerCase();
+  _cfg.connMode = (modeValue == "eth") ? ConnMode::ETHERNET : ConnMode::WIFI;
+  _cfg.backendUrl = String(_pBackend->getValue());
+  _cfg.apiKey = String(_pApiKey->getValue());
+  _cfg.syncIntervalS = atoi(_pSync->getValue());
+  _cfg.relayPulseMs = atoi(_pPulse->getValue());
+  _cfg.tz = String(_pTz->getValue());
+  _cfg.doorLabel = String(_pLabel->getValue());
+  if (_cfg.syncIntervalS < 10) _cfg.syncIntervalS = DEFAULT_SYNC_INTERVAL_S;
+  if (_cfg.relayPulseMs < 100) _cfg.relayPulseMs = DEFAULT_RELAY_PULSE_MS;
+  if (_cfg.tz.length() == 0) _cfg.tz = DEFAULT_TZ;
+}
+
+// Fired by WiFiManager from inside the web server's request handler when
+// the form is submitted — whether that's the LAN portal's "Setup" page
+// (params only, no WiFi credentials touched — triggers setSaveParamsCallback)
+// or its "Configure WiFi" page (SSID/password + our params together, same
+// as the AP flow — triggers setSaveConfigCallback). Both are wired to this
+// same handler so either path saves correctly. Restarting here directly
+// would cut off the "saved" response mid-flight, so this only applies and
+// persists the config, then arms a short delayed restart that loop() acts
+// on once the response has had time to reach the browser.
+void NetworkManager::onParamsSaved() {
+  applyParamsToConfig();
+  saveConfig();
+  Serial.println("[net] Config saved via LAN web portal. Rebooting shortly...");
+  _pendingRestart = true;
+  _pendingRestartAtMs = millis() + 1500;
+}
+
 void NetworkManager::runConfigPortal() {
-  WiFiManager wm;
+  refreshParamBuffers();
 
-  char bufMode[8];
-  strncpy(bufMode, _cfg.connMode == ConnMode::ETHERNET ? "eth" : "wifi", sizeof(bufMode));
-  char bufBackend[128];
-  strncpy(bufBackend, _cfg.backendUrl.length() ? _cfg.backendUrl.c_str() : DEFAULT_BACKEND_URL, sizeof(bufBackend));
-  char bufApiKey[80];
-  strncpy(bufApiKey, _cfg.apiKey.c_str(), sizeof(bufApiKey));
-  char bufSync[8];
-  snprintf(bufSync, sizeof(bufSync), "%u", _cfg.syncIntervalS ? _cfg.syncIntervalS : DEFAULT_SYNC_INTERVAL_S);
-  char bufPulse[8];
-  snprintf(bufPulse, sizeof(bufPulse), "%u", _cfg.relayPulseMs ? _cfg.relayPulseMs : DEFAULT_RELAY_PULSE_MS);
-  char bufTz[64];
-  strncpy(bufTz, _cfg.tz.length() ? _cfg.tz.c_str() : DEFAULT_TZ, sizeof(bufTz));
-  char bufLabel[40];
-  strncpy(bufLabel, _cfg.doorLabel.c_str(), sizeof(bufLabel));
-
-  // Plain text field instead of a <select> — WiFiManagerParameter doesn't
-  // support real dropdowns, and hand-rolling one means poking at the
-  // library's internal web server to read the posted value back out.
-  WiFiManagerParameter pMode("conn_mode", "Modo: 'wifi' o 'eth' (modulo W5500)", bufMode, sizeof(bufMode));
-  WiFiManagerParameter pBackend("backend_url", "URL del backend (http://host:8010)", bufBackend, sizeof(bufBackend));
-  WiFiManagerParameter pApiKey("api_key", "API key de esta puerta", bufApiKey, sizeof(bufApiKey));
-  WiFiManagerParameter pSync("sync_s", "Intervalo de sync (segundos)", bufSync, sizeof(bufSync));
-  WiFiManagerParameter pPulse("pulse_ms", "Duracion pulso rele (ms)", bufPulse, sizeof(bufPulse));
-  WiFiManagerParameter pTz("tz", "TZ POSIX (ver nayarsystems/posix_tz_db)", bufTz, sizeof(bufTz));
-  WiFiManagerParameter pLabel("label", "Etiqueta del nodo (opcional)", bufLabel, sizeof(bufLabel));
-
-  wm.addParameter(&pMode);
-  wm.addParameter(&pBackend);
-  wm.addParameter(&pApiKey);
-  wm.addParameter(&pSync);
-  wm.addParameter(&pPulse);
-  wm.addParameter(&pTz);
-  wm.addParameter(&pLabel);
-
-  wm.setConfigPortalTimeout(0);  // wait indefinitely for the installer to configure it
+  _wm.setConfigPortalTimeout(0);  // wait indefinitely for the installer to configure it
 
   pinMode(PIN_STATUS_LED, OUTPUT);
   digitalWrite(PIN_STATUS_LED, HIGH);  // solid on = waiting for configuration
@@ -87,25 +135,30 @@ void NetworkManager::runConfigPortal() {
   // In WiFi mode this also collects and saves the STA SSID/password (via
   // WiFiManager's normal flow) which the ESP32 WiFi stack then persists on
   // its own. In Ethernet mode those credentials are simply left unused.
-  wm.startConfigPortal(AP_PORTAL_NAME);
+  _wm.startConfigPortal(AP_PORTAL_NAME);
 
-  String modeValue = String(pMode.getValue());
-  modeValue.toLowerCase();
-  _cfg.connMode = (modeValue == "eth") ? ConnMode::ETHERNET : ConnMode::WIFI;
-  _cfg.backendUrl = String(pBackend.getValue());
-  _cfg.apiKey = String(pApiKey.getValue());
-  _cfg.syncIntervalS = atoi(pSync.getValue());
-  _cfg.relayPulseMs = atoi(pPulse.getValue());
-  _cfg.tz = String(pTz.getValue());
-  _cfg.doorLabel = String(pLabel.getValue());
-  if (_cfg.syncIntervalS < 10) _cfg.syncIntervalS = DEFAULT_SYNC_INTERVAL_S;
-  if (_cfg.relayPulseMs < 100) _cfg.relayPulseMs = DEFAULT_RELAY_PULSE_MS;
-  if (_cfg.tz.length() == 0) _cfg.tz = DEFAULT_TZ;
-
+  applyParamsToConfig();
   saveConfig();
   Serial.println("[net] Config saved. Rebooting...");
   delay(500);
   ESP.restart();
+}
+
+// Non-blocking counterpart to runConfigPortal(): once the node already has
+// a WiFi (STA) connection, this starts the same WiFiManager web server —
+// same "Configure WiFi" + custom-params pages — bound to the node's normal
+// LAN IP instead of bringing up an AP. No button, no reboot to reach it;
+// changes made here are picked up via onParamsSaved() above.
+void NetworkManager::startWebConfigPortal() {
+  if (!ENABLE_LAN_CONFIG_PORTAL) return;
+
+  refreshParamBuffers();
+  _wm.setSaveConfigCallback([this]() { onParamsSaved(); });
+  _wm.setSaveParamsCallback([this]() { onParamsSaved(); });
+  _wm.startWebPortal();
+  _webPortalActive = true;
+  Serial.printf("[net] LAN config portal available at http://%s/ (same form as the AP portal)\n",
+                WiFi.localIP().toString().c_str());
 }
 
 void NetworkManager::connectWifi() {
@@ -152,6 +205,7 @@ void NetworkManager::connectEthernet() {
 void NetworkManager::begin() {
   pinMode(PIN_CONFIG_BUTTON, INPUT_PULLUP);
   loadConfig();
+  setupParams();
 
   bool forcePortal = (digitalRead(PIN_CONFIG_BUTTON) == LOW);
   if (forcePortal) {
@@ -169,10 +223,17 @@ void NetworkManager::begin() {
     connectEthernet();
   } else {
     connectWifi();
+    if (WiFi.status() == WL_CONNECTED) startWebConfigPortal();
   }
 }
 
 void NetworkManager::loop() {
+  if (_pendingRestart && millis() >= _pendingRestartAtMs) {
+    ESP.restart();
+  }
+
+  if (_webPortalActive) _wm.process();
+
   if (_cfg.connMode == ConnMode::ETHERNET) {
     Ethernet.maintain();
     return;
