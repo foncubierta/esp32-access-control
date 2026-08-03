@@ -101,6 +101,14 @@ uvicorn main:app --host 0.0.0.0 --port 8010 --reload
 
 En el primer arranque se crea un usuario admin con `ADMIN_USERNAME` / `ADMIN_PASSWORD` (por defecto `admin` / `admin` — cámbialo). Una vez dentro, la contraseña se cambia desde el propio panel: icono de candado junto al nombre de usuario, abajo a la izquierda (requiere la contraseña actual y un mínimo de 8 caracteres para la nueva — `POST /api/auth/change-password`).
 
+Si te quedas fuera del panel (contraseña olvidada, sin admin válido...), `backend/reset_admin_password.py` la fuerza directamente en la base de datos desde SSH, sin necesitar la anterior:
+
+```bash
+cd backend
+.venv/bin/python3 reset_admin_password.py la_nueva_contraseña          # resetea 'admin'
+.venv/bin/python3 reset_admin_password.py la_nueva_contraseña --username otro   # o crea uno si no existe
+```
+
 ### Frontend
 
 ```bash

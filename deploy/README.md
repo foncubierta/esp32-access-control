@@ -155,3 +155,9 @@ systemctl reload nginx
   firmware del ESP32 tampoco soporta HTTPS (ver limitaciones en
   `firmware/access-node/README.md`) — pensado para quedarse dentro de la LAN,
   no para exponerse a Internet tal cual.
+- Si te quedas fuera del panel (contraseña olvidada), resetéala por SSH sin
+  necesitar la anterior:
+  ```bash
+  cd /opt/esp32-access-control/backend
+  runuser -u access-control -- .venv/bin/python3 reset_admin_password.py la_nueva_contraseña
+  ```
