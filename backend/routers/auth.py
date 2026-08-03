@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
+import audit
 from database import get_session
 from models import AdminUser
 from security import verify_password, hash_password
@@ -30,8 +31,10 @@ class AdminOut(BaseModel):
 def login(body: LoginRequest, session: Session = Depends(get_session)):
     admin = session.exec(select(AdminUser).where(AdminUser.username == body.username)).first()
     if not admin or not verify_password(body.password, admin.password_hash):
+        audit.log(session, body.username, "login_failed", "admin_account", f"Login fallido para «{body.username}»")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     token = create_access_token(admin.username)
+    audit.log(session, admin.username, "login_success", "admin_account", f"«{admin.username}» inició sesión", entity_id=admin.id, entity_label=admin.username)
     return LoginResponse(access_token=token)
 
 
@@ -58,4 +61,8 @@ def change_password(
     admin.password_hash = hash_password(body.new_password)
     session.add(admin)
     session.commit()
+    audit.log(
+        session, admin.username, "password_changed", "admin_account", f"«{admin.username}» cambió su contraseña",
+        entity_id=admin.id, entity_label=admin.username,
+    )
     return {"ok": True}

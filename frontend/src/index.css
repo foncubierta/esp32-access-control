@@ -220,8 +220,12 @@ code { background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px; fo
 }
 .dayChipActive { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
 
-.filters { display: flex; gap: 10px; }
-.filters select { min-width: 180px; }
+.filters { display: flex; gap: 10px; flex-wrap: wrap; }
+.filters select { min-width: 160px; }
+.filters input[type="text"], .filters input:not([type]) { min-width: 160px; }
+.filters input[type="datetime-local"] { min-width: 180px; }
+
+.auditDetails { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
 
 /* Guard view */
 .modeGrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }

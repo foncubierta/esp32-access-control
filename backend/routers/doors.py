@@ -3,15 +3,23 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
+import audit
 import enrollment
 from database import get_session
-from models import Door, Permission
+from models import Door, Permission, AdminUser
 from dependencies import get_current_admin
 from security import generate_api_key
 
 router = APIRouter(prefix="/api/doors", tags=["doors"], dependencies=[Depends(get_current_admin)])
 
 DOOR_MODES = {"auto", "open", "closed", "identify"}
+DOOR_FIELD_LABELS = {
+    "name": "Nombre",
+    "location": "Ubicación",
+    "description": "Descripción",
+    "active": "Activa",
+    "mode": "Modo",
+}
 
 
 def _validate_mode(mode: Optional[str]):
@@ -40,30 +48,41 @@ def list_doors(session: Session = Depends(get_session)):
 
 
 @router.post("", response_model=Door)
-def create_door(body: DoorCreate, session: Session = Depends(get_session)):
+def create_door(body: DoorCreate, admin: AdminUser = Depends(get_current_admin), session: Session = Depends(get_session)):
     door = Door(**body.model_dump(), api_key=generate_api_key())
     session.add(door)
     session.commit()
     session.refresh(door)
+    audit.log(session, admin.username, "created", "door", f"Creó la puerta «{door.name}»", entity_id=door.id, entity_label=door.name)
     return door
 
 
 @router.patch("/{door_id}", response_model=Door)
-def update_door(door_id: int, body: DoorUpdate, session: Session = Depends(get_session)):
+def update_door(
+    door_id: int, body: DoorUpdate, admin: AdminUser = Depends(get_current_admin), session: Session = Depends(get_session)
+):
     door = session.get(Door, door_id)
     if not door:
         raise HTTPException(status_code=404, detail="Door not found")
     _validate_mode(body.mode)
-    for key, value in body.model_dump(exclude_unset=True).items():
+    updates = body.model_dump(exclude_unset=True)
+    before = {key: getattr(door, key) for key in updates}
+    for key, value in updates.items():
         setattr(door, key, value)
     session.add(door)
     session.commit()
     session.refresh(door)
+    changes = audit.describe_changes(before, updates, DOOR_FIELD_LABELS)
+    if changes:
+        audit.log(
+            session, admin.username, "updated", "door", f"Editó la puerta «{door.name}»",
+            entity_id=door.id, entity_label=door.name, details=changes,
+        )
     return door
 
 
 @router.post("/{door_id}/rotate-key", response_model=Door)
-def rotate_key(door_id: int, session: Session = Depends(get_session)):
+def rotate_key(door_id: int, admin: AdminUser = Depends(get_current_admin), session: Session = Depends(get_session)):
     door = session.get(Door, door_id)
     if not door:
         raise HTTPException(status_code=404, detail="Door not found")
@@ -71,11 +90,15 @@ def rotate_key(door_id: int, session: Session = Depends(get_session)):
     session.add(door)
     session.commit()
     session.refresh(door)
+    audit.log(
+        session, admin.username, "key_rotated", "door", f"Rotó la API key de «{door.name}» (el nodo dejará de sincronizar hasta reconfigurarlo)",
+        entity_id=door.id, entity_label=door.name,
+    )
     return door
 
 
 @router.post("/{door_id}/trigger", response_model=Door)
-def trigger_door(door_id: int, session: Session = Depends(get_session)):
+def trigger_door(door_id: int, admin: AdminUser = Depends(get_current_admin), session: Session = Depends(get_session)):
     """Guard-initiated one-off relay pulse, independent of mode/credentials.
     Bumps a counter the node picks up on its next mode poll (a few seconds
     later) and fires once — there's no direct connection to the node to
@@ -87,6 +110,10 @@ def trigger_door(door_id: int, session: Session = Depends(get_session)):
     session.add(door)
     session.commit()
     session.refresh(door)
+    audit.log(
+        session, admin.username, "manual_trigger", "door", f"Envió una apertura manual a «{door.name}»",
+        entity_id=door.id, entity_label=door.name,
+    )
     return door
 
 
@@ -121,12 +148,14 @@ def disarm_enroll(door_id: int, session: Session = Depends(get_session)):
 
 
 @router.delete("/{door_id}")
-def delete_door(door_id: int, session: Session = Depends(get_session)):
+def delete_door(door_id: int, admin: AdminUser = Depends(get_current_admin), session: Session = Depends(get_session)):
     door = session.get(Door, door_id)
     if not door:
         raise HTTPException(status_code=404, detail="Door not found")
+    name = door.name
     for permission in session.exec(select(Permission).where(Permission.door_id == door_id)).all():
         session.delete(permission)
     session.delete(door)
     session.commit()
+    audit.log(session, admin.username, "deleted", "door", f"Eliminó la puerta «{name}»", entity_id=door_id, entity_label=name)
     return {"ok": True}

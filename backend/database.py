@@ -36,5 +36,12 @@ def _run_migrations():
 
 
 def get_session():
-    with Session(engine) as session:
+    # expire_on_commit=False: routers call audit.log() (its own commit) right
+    # after the main entity's commit+refresh, in the same request/session.
+    # Default expire-on-commit would mark that entity's attributes stale,
+    # and FastAPI's response_model serialization would then silently see
+    # empty values instead of raising — every route already calls
+    # session.refresh() explicitly when it actually needs fresh DB state,
+    # so this doesn't hide any real staleness.
+    with Session(engine, expire_on_commit=False) as session:
         yield session

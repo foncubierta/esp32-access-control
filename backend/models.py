@@ -92,6 +92,22 @@ class GroupPermission(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
+class AuditLog(SQLModel, table=True):
+    """Admin-panel activity trail — who changed what and when. Separate from
+    AccessLog (which is node-reported physical access attempts): this is
+    for troubleshooting questions like "who deactivated this credential" or
+    "who opened door X manually just now", not "did this card get in"."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    actor: str  # admin username, or the attempted username for failed logins
+    action: str  # created | updated | deleted | login_success | login_failed | password_changed | manual_trigger | key_rotated
+    entity_type: str  # user | credential | credential_group | group_permission | door | permission | admin_account
+    entity_id: Optional[int] = None
+    entity_label: Optional[str] = None  # human-readable name snapshot — still readable after the entity is deleted
+    summary: str  # one-liner for the list view, e.g. "Quitó acceso de 'Tarjeta Juan' a 'Puerta Norte'"
+    details: Optional[str] = None  # optional extra context, e.g. field-level before → after
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
 class AccessLog(SQLModel, table=True):
     """Access attempt reported by a node, synced up in batches."""
     id: Optional[int] = Field(default=None, primary_key=True)

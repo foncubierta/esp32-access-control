@@ -49,6 +49,21 @@ copiarlo del monitor serie.
 - **Permission**: acceso suelto de UNA `Credential` a UNA `Door`, con horario opcional (`days_of_week`, `time_start`, `time_end`). Sin horario = acceso permitido en cualquier momento.
 - **GroupPermission**: igual que `Permission` pero a nivel de `CredentialGroup` — da acceso a esa puerta a *todas* las credenciales activas del grupo.
 - **AccessLog**: eventos de apertura/denegación subidos por los nodos, para auditoría. Incluye `door_mode`: en qué modo estaba la puerta cuando ocurrió, independientemente de si la credencial en sí tenía o no acceso (`result`).
+- **AuditLog**: quién cambió qué **desde el panel** — ver sección de abajo. Distinto de `AccessLog`: este no es sobre tarjetas pasadas por un lector, es sobre acciones de un admin (crear/editar/borrar, aperturas manuales, logins...).
+
+### Auditoría (página **Auditoría**, `/api/audit-log`)
+
+Todo cambio hecho desde el panel queda registrado: usuarios, credenciales, grupos, permisos (directos y de grupo), puertas — incluyendo específicamente cuándo cambia el **modo** de una puerta o se rota su API key — más aperturas manuales (`POST /api/doors/:id/trigger`), logins (correctos y fallidos) y cambios de contraseña. Cada entrada tiene:
+
+- `actor`: qué admin lo hizo (o el usuario intentado, si el login falló).
+- `action`: `created` | `updated` | `deleted` | `login_success` | `login_failed` | `password_changed` | `manual_trigger` | `key_rotated`.
+- `entity_type`: `user` | `credential` | `credential_group` | `group_permission` | `door` | `permission` | `admin_account`.
+- `summary`: resumen en una línea, ya en español ("Quitó acceso: Tarjeta Juan (Juan Pérez) → Puerta Norte").
+- `details`: en las ediciones, qué campos cambiaron y de qué valor a qué valor ("Modo: auto → closed").
+
+La página tiene filtros combinables por texto libre (busca en resumen/detalles/nombre de la entidad), admin, acción, tipo de entidad y rango de fechas — pensada para depurar "por qué no abrió esta puerta" sin tener que adivinar qué cambió.
+
+Se registra con una llamada explícita (`audit.log(...)`) al final de cada endpoint que modifica algo — nada de hooks automáticos de ORM — así que para saber qué queda auditado basta con mirar el propio router.
 
 Desactivar una `Door` hace que el siguiente `/api/node/sync` le devuelva la lista de credenciales vacía — así es como se bloquea una puerta remotamente.
 
@@ -172,6 +187,8 @@ PATCH  /api/permissions/:id          Editar / activar / desactivar
 DELETE /api/permissions/:id          Borrar permiso
 
 GET    /api/logs?door_id=&credential_id=&result=&since=&limit=   Ver logs de acceso
+
+GET    /api/audit-log?actor=&action=&entity_type=&entity_id=&q=&since=&until=&limit=   Ver auditoría de cambios en el panel
 ```
 
 ### Nodo ESP32 (header `X-Api-Key: <api_key de la puerta>`)

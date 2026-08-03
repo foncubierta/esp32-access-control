@@ -5,8 +5,9 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
+import audit
 from database import get_session
-from models import User, Credential, Permission
+from models import User, Credential, Permission, AdminUser
 from dependencies import get_current_admin
 
 router = APIRouter(prefix="/api/users", tags=["users"], dependencies=[Depends(get_current_admin)])
@@ -14,6 +15,16 @@ router = APIRouter(prefix="/api/users", tags=["users"], dependencies=[Depends(ge
 PHOTOS_DIR = Path("./data/photos")
 PHOTOS_DIR.mkdir(parents=True, exist_ok=True)
 ALLOWED_PHOTO_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+
+FIELD_LABELS = {
+    "full_name": "Nombre",
+    "email": "Email",
+    "phone": "Teléfono",
+    "dni": "DNI",
+    "address": "Dirección",
+    "notes": "Notas",
+    "active": "Activo",
+}
 
 
 class UserCreate(BaseModel):
@@ -42,11 +53,12 @@ def list_users(session: Session = Depends(get_session)):
 
 
 @router.post("", response_model=User)
-def create_user(body: UserCreate, session: Session = Depends(get_session)):
+def create_user(body: UserCreate, admin: AdminUser = Depends(get_current_admin), session: Session = Depends(get_session)):
     user = User(**body.model_dump())
     session.add(user)
     session.commit()
     session.refresh(user)
+    audit.log(session, admin.username, "created", "user", f"Creó al usuario «{user.full_name}»", entity_id=user.id, entity_label=user.full_name)
     return user
 
 
@@ -59,23 +71,34 @@ def get_user(user_id: int, session: Session = Depends(get_session)):
 
 
 @router.patch("/{user_id}", response_model=User)
-def update_user(user_id: int, body: UserUpdate, session: Session = Depends(get_session)):
+def update_user(
+    user_id: int, body: UserUpdate, admin: AdminUser = Depends(get_current_admin), session: Session = Depends(get_session)
+):
     user = session.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    for key, value in body.model_dump(exclude_unset=True).items():
+    updates = body.model_dump(exclude_unset=True)
+    before = {key: getattr(user, key) for key in updates}
+    for key, value in updates.items():
         setattr(user, key, value)
     session.add(user)
     session.commit()
     session.refresh(user)
+    changes = audit.describe_changes(before, updates, FIELD_LABELS)
+    if changes:
+        audit.log(
+            session, admin.username, "updated", "user", f"Editó al usuario «{user.full_name}»",
+            entity_id=user.id, entity_label=user.full_name, details=changes,
+        )
     return user
 
 
 @router.delete("/{user_id}")
-def delete_user(user_id: int, session: Session = Depends(get_session)):
+def delete_user(user_id: int, admin: AdminUser = Depends(get_current_admin), session: Session = Depends(get_session)):
     user = session.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    full_name = user.full_name
     credentials = session.exec(select(Credential).where(Credential.user_id == user_id)).all()
     for credential in credentials:
         for permission in session.exec(select(Permission).where(Permission.credential_id == credential.id)).all():
@@ -85,11 +108,21 @@ def delete_user(user_id: int, session: Session = Depends(get_session)):
         (PHOTOS_DIR / user.photo_path).unlink(missing_ok=True)
     session.delete(user)
     session.commit()
+    audit.log(
+        session, admin.username, "deleted", "user",
+        f"Eliminó al usuario «{full_name}» (con sus credenciales y permisos)",
+        entity_id=user_id, entity_label=full_name,
+    )
     return {"ok": True}
 
 
 @router.post("/{user_id}/photo", response_model=User)
-async def upload_photo(user_id: int, file: UploadFile = File(...), session: Session = Depends(get_session)):
+async def upload_photo(
+    user_id: int,
+    file: UploadFile = File(...),
+    admin: AdminUser = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+):
     user = session.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -109,6 +142,10 @@ async def upload_photo(user_id: int, file: UploadFile = File(...), session: Sess
     session.add(user)
     session.commit()
     session.refresh(user)
+    audit.log(
+        session, admin.username, "updated", "user", f"Subió una foto para «{user.full_name}»",
+        entity_id=user.id, entity_label=user.full_name,
+    )
     return user
 
 
@@ -124,7 +161,7 @@ def get_photo(user_id: int, session: Session = Depends(get_session)):
 
 
 @router.delete("/{user_id}/photo", response_model=User)
-def delete_photo(user_id: int, session: Session = Depends(get_session)):
+def delete_photo(user_id: int, admin: AdminUser = Depends(get_current_admin), session: Session = Depends(get_session)):
     user = session.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -134,4 +171,8 @@ def delete_photo(user_id: int, session: Session = Depends(get_session)):
         session.add(user)
         session.commit()
         session.refresh(user)
+        audit.log(
+            session, admin.username, "updated", "user", f"Quitó la foto de «{user.full_name}»",
+            entity_id=user.id, entity_label=user.full_name,
+        )
     return user

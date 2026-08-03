@@ -7,6 +7,7 @@ import CredentialsPage from "./pages/CredentialsPage.jsx";
 import GroupsPage from "./pages/GroupsPage.jsx";
 import DoorsPage from "./pages/DoorsPage.jsx";
 import LogsPage from "./pages/LogsPage.jsx";
+import AuditLogPage from "./pages/AuditLogPage.jsx";
 import GuardPage from "./pages/GuardPage.jsx";
 
 export default function App() {
@@ -27,6 +28,7 @@ export default function App() {
         <Route path="groups" element={<GroupsPage />} />
         <Route path="doors" element={<DoorsPage />} />
         <Route path="logs" element={<LogsPage />} />
+        <Route path="audit" element={<AuditLogPage />} />
         <Route path="guard" element={<GuardPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

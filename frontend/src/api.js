@@ -109,4 +109,7 @@ export const api = {
   logs: {
     list: (params) => req(withQuery("/logs", params)),
   },
+  auditLog: {
+    list: (params) => req(withQuery("/audit-log", params)),
+  },
 };
