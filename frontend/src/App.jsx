@@ -6,7 +6,6 @@ import UsersPage from "./pages/UsersPage.jsx";
 import CredentialsPage from "./pages/CredentialsPage.jsx";
 import GroupsPage from "./pages/GroupsPage.jsx";
 import DoorsPage from "./pages/DoorsPage.jsx";
-import PermissionsPage from "./pages/PermissionsPage.jsx";
 import LogsPage from "./pages/LogsPage.jsx";
 import GuardPage from "./pages/GuardPage.jsx";
 
@@ -27,7 +26,6 @@ export default function App() {
         <Route path="credentials" element={<CredentialsPage />} />
         <Route path="groups" element={<GroupsPage />} />
         <Route path="doors" element={<DoorsPage />} />
-        <Route path="permissions" element={<PermissionsPage />} />
         <Route path="logs" element={<LogsPage />} />
         <Route path="guard" element={<GuardPage />} />
       </Route>

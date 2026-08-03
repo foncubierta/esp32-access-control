@@ -56,14 +56,14 @@ Desactivar una `Door` hace que el siguiente `/api/node/sync` le devuelva la list
 
 El acceso real de una credencial a una puerta es la **unión** de dos caminos independientes, y puede tener ambos a la vez:
 
-1. **Directo**: un `Permission` suelto para esa credencial concreta (página **Permisos**).
+1. **Directo**: un `Permission` suelto para esa credencial concreta — se gestiona dentro del propio formulario de **Credenciales > Nueva/Editar credencial**, sección "Puertas adicionales (aparte de las del grupo)": puedes añadir cero, una, dos o más puertas sueltas, cada una con su horario opcional (días/franja) y un toggle activo/inactivo, sin salir de la credencial. No hay una página aparte para esto — la antigua página "Permisos" se eliminó, era pura redundancia una vez que esta sección cubre lo mismo.
 2. **Por grupo**: la credencial pertenece a un `CredentialGroup` (VIP, Mantenimiento, Zona A...) que tiene un `GroupPermission` para esa puerta (página **Grupos**).
 
 `/api/node/sync` puede devolver la misma credencial dos veces — una por cada camino, cada una con su propio horario — y el nodo la deja pasar si **cualquiera** de las entradas la permite en ese momento (`AccessController::evaluate()` en el firmware recorre todas las coincidencias, no se queda con la primera). Así una credencial puede tener acceso 24h a su puerta habitual por grupo, y además un permiso suelto puntual a otra puerta fuera de horario, sin que se pisen.
 
 Borrar un grupo no borra sus credenciales: simplemente las deja sin grupo (`group_id = null`), y pierden el acceso que venía por ese camino (conservan cualquier permiso directo que tuvieran).
 
-El propio formulario de **Credenciales > Nueva/Editar credencial** ya deja añadir ese permiso directo sin salir a la página Permisos: una vez guardada la credencial aparece "Puertas adicionales (aparte de las del grupo)", donde puedes añadir cero, una, dos o más puertas sueltas — no es obligatorio añadir ninguna si la credencial solo necesita lo que ya le da su grupo. El campo "Tipo" (rfid/pin/nfc) se quitó del formulario porque no afecta a la evaluación de acceso; el valor sigue aceptando tanto un UID de tarjeta como un PIN indistintamente.
+El campo "Tipo" (rfid/pin/nfc) se quitó del formulario de credenciales porque no afecta a la evaluación de acceso; el valor sigue aceptando tanto un UID de tarjeta como un PIN indistintamente.
 
 ### Modos de puerta (vista de vigilancia)
 
@@ -166,7 +166,7 @@ PATCH  /api/doors/:id                Editar puerta (incluye mode: auto|open|clos
 POST   /api/doors/:id/rotate-key     Regenerar api_key del nodo
 DELETE /api/doors/:id                Borrar puerta (cascada: permisos)
 
-GET    /api/permissions?door_id=&credential_id=&user_id=   Listar permisos sueltos (por credencial)
+GET    /api/permissions?door_id=&credential_id=&user_id=   Listar permisos sueltos (usado desde Credenciales > Puertas adicionales, sin página propia)
 POST   /api/permissions             Crear permiso ({ credential_id, door_id, days_of_week?, time_start?, time_end? })
 PATCH  /api/permissions/:id          Editar / activar / desactivar
 DELETE /api/permissions/:id          Borrar permiso

@@ -1,11 +1,34 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Plus, Pencil, Trash2, Scan, X as XIcon } from "lucide-react";
+import { Plus, Pencil, Trash2, Scan } from "lucide-react";
 import { api } from "../api.js";
 import Modal from "../components/Modal.jsx";
 
 const emptyForm = { user_id: "", group_id: "", label: "", value: "", active: true, valid_from: "", valid_until: "" };
 const ENROLL_POLL_MS = 1000;
 const ENROLL_TIMEOUT_MS = 30000;
+
+const DAYS = [
+  { value: 0, label: "L" },
+  { value: 1, label: "M" },
+  { value: 2, label: "X" },
+  { value: 3, label: "J" },
+  { value: 4, label: "V" },
+  { value: 5, label: "S" },
+  { value: 6, label: "D" },
+];
+
+const emptyExtraDoorForm = { door_id: "", days: [], time_start: "", time_end: "" };
+
+function scheduleLabel(perm) {
+  const days = perm.days_of_week
+    ? perm.days_of_week
+        .split(",")
+        .map((d) => DAYS[Number(d)].label)
+        .join("")
+    : "Todos los días";
+  const hours = perm.time_start || perm.time_end ? `${perm.time_start || "00:00"}–${perm.time_end || "23:59"}` : "Todo el día";
+  return `${days} · ${hours}`;
+}
 
 export default function CredentialsPage() {
   const [credentials, setCredentials] = useState([]);
@@ -22,7 +45,8 @@ export default function CredentialsPage() {
   const enrollPollRef = useRef(null);
   const enrollTimeoutRef = useRef(null);
   const [extraPermissions, setExtraPermissions] = useState([]);
-  const [addingDoorId, setAddingDoorId] = useState("");
+  const [extraDoorForm, setExtraDoorForm] = useState(emptyExtraDoorForm);
+  const [extraDoorError, setExtraDoorError] = useState("");
 
   const load = useCallback(() => {
     setLoading(true);
@@ -59,10 +83,34 @@ export default function CredentialsPage() {
     api.permissions.list({ credential_id: credentialId }).then(setExtraPermissions);
   }, []);
 
-  async function addExtraDoor() {
-    if (!addingDoorId || !editing?.id) return;
-    await api.permissions.create({ credential_id: editing.id, door_id: Number(addingDoorId) });
-    setAddingDoorId("");
+  function toggleExtraDoorDay(value) {
+    setExtraDoorForm((f) => ({
+      ...f,
+      days: f.days.includes(value) ? f.days.filter((d) => d !== value) : [...f.days, value].sort((a, b) => a - b),
+    }));
+  }
+
+  async function addExtraDoor(e) {
+    e.preventDefault();
+    setExtraDoorError("");
+    if (!extraDoorForm.door_id || !editing?.id) return;
+    try {
+      await api.permissions.create({
+        credential_id: editing.id,
+        door_id: Number(extraDoorForm.door_id),
+        days_of_week: extraDoorForm.days.length ? extraDoorForm.days.join(",") : null,
+        time_start: extraDoorForm.time_start || null,
+        time_end: extraDoorForm.time_end || null,
+      });
+      setExtraDoorForm(emptyExtraDoorForm);
+      loadExtraPermissions(editing.id);
+    } catch (err) {
+      setExtraDoorError(err.message);
+    }
+  }
+
+  async function toggleExtraDoorActive(perm) {
+    await api.permissions.update(perm.id, { active: !perm.active });
     loadExtraPermissions(editing.id);
   }
 
@@ -125,7 +173,8 @@ export default function CredentialsPage() {
     cancelEnroll();
     setEditing(null);
     setExtraPermissions([]);
-    setAddingDoorId("");
+    setExtraDoorForm(emptyExtraDoorForm);
+    setExtraDoorError("");
   }
 
   function openCreate() {
@@ -133,7 +182,8 @@ export default function CredentialsPage() {
     setForm(emptyForm);
     setError("");
     setExtraPermissions([]);
-    setAddingDoorId("");
+    setExtraDoorForm(emptyExtraDoorForm);
+    setExtraDoorError("");
     setEditing({});
   }
 
@@ -149,7 +199,8 @@ export default function CredentialsPage() {
       valid_until: cred.valid_until ? cred.valid_until.slice(0, 10) : "",
     });
     setError("");
-    setAddingDoorId("");
+    setExtraDoorForm(emptyExtraDoorForm);
+    setExtraDoorError("");
     setEditing(cred);
     loadExtraPermissions(cred.id);
   }
@@ -313,42 +364,107 @@ export default function CredentialsPage() {
               </label>
             )}
 
-            <label>
-              Puertas adicionales (aparte de las del grupo)
-              {extraPermissions.length > 0 && (
-                <div className="chipList">
-                  {extraPermissions.map((p) => (
-                    <span key={p.id} className="chip">
-                      {doorName(p.door_id)}
-                      <button type="button" onClick={() => removeExtraDoor(p.id)} title="Quitar">
-                        <XIcon size={12} />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
+            <div className="extraDoorsSection">
+              <label>Puertas adicionales (aparte de las del grupo)</label>
               {!editing.id ? (
-                <span className="hint">Guarda la credencial primero para poder añadir puertas adicionales.</span>
-              ) : doors.filter((d) => !extraPermissions.some((p) => p.door_id === d.id)).length > 0 ? (
-                <div className="enrollRow">
-                  <select value={addingDoorId} onChange={(e) => setAddingDoorId(e.target.value)}>
-                    <option value="">Ninguna — solo el grupo</option>
-                    {doors
-                      .filter((d) => !extraPermissions.some((p) => p.door_id === d.id))
-                      .map((d) => (
-                        <option key={d.id} value={d.id}>
-                          {d.name}
-                        </option>
-                      ))}
-                  </select>
-                  <button type="button" className="btn" onClick={addExtraDoor} disabled={!addingDoorId}>
-                    <Plus size={14} /> Añadir puerta
-                  </button>
-                </div>
+                <p className="hint">Guarda la credencial primero para poder añadir puertas adicionales.</p>
               ) : (
-                doors.length > 0 && <span className="hint">Ya tiene acceso directo a todas las puertas.</span>
+                <>
+                  {extraPermissions.length > 0 && (
+                    <table className="table extraDoorsTable">
+                      <thead>
+                        <tr>
+                          <th>Puerta</th>
+                          <th>Horario</th>
+                          <th>Estado</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {extraPermissions.map((p) => (
+                          <tr key={p.id}>
+                            <td>{doorName(p.door_id)}</td>
+                            <td className="muted">{scheduleLabel(p)}</td>
+                            <td>
+                              <button
+                                type="button"
+                                className={`badge badgeButton ${p.active ? "badgeSuccess" : "badgeMuted"}`}
+                                onClick={() => toggleExtraDoorActive(p)}
+                              >
+                                {p.active ? "Activo" : "Inactivo"}
+                              </button>
+                            </td>
+                            <td className="rowActions">
+                              <button type="button" className="iconBtn iconBtnDanger" onClick={() => removeExtraDoor(p.id)}>
+                                <Trash2 size={14} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+
+                  {doors.filter((d) => !extraPermissions.some((p) => p.door_id === d.id)).length > 0 ? (
+                    <div className="form extraDoorForm">
+                      {extraDoorError && <p className="formError">{extraDoorError}</p>}
+                      <label>
+                        Puerta
+                        <select
+                          value={extraDoorForm.door_id}
+                          onChange={(e) => setExtraDoorForm({ ...extraDoorForm, door_id: e.target.value })}
+                        >
+                          <option value="">Selecciona una puerta</option>
+                          {doors
+                            .filter((d) => !extraPermissions.some((p) => p.door_id === d.id))
+                            .map((d) => (
+                              <option key={d.id} value={d.id}>
+                                {d.name}
+                              </option>
+                            ))}
+                        </select>
+                      </label>
+                      <label>Días permitidos (ninguno seleccionado = todos)</label>
+                      <div className="dayPicker">
+                        {DAYS.map((d) => (
+                          <button
+                            type="button"
+                            key={d.value}
+                            className={`dayChip ${extraDoorForm.days.includes(d.value) ? "dayChipActive" : ""}`}
+                            onClick={() => toggleExtraDoorDay(d.value)}
+                          >
+                            {d.label}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="formGrid">
+                        <label>
+                          Desde
+                          <input
+                            type="time"
+                            value={extraDoorForm.time_start}
+                            onChange={(e) => setExtraDoorForm({ ...extraDoorForm, time_start: e.target.value })}
+                          />
+                        </label>
+                        <label>
+                          Hasta
+                          <input
+                            type="time"
+                            value={extraDoorForm.time_end}
+                            onChange={(e) => setExtraDoorForm({ ...extraDoorForm, time_end: e.target.value })}
+                          />
+                        </label>
+                      </div>
+                      <button type="button" className="btn" onClick={addExtraDoor} disabled={!extraDoorForm.door_id}>
+                        <Plus size={14} /> Añadir puerta
+                      </button>
+                    </div>
+                  ) : (
+                    doors.length > 0 && <p className="hint">Ya tiene acceso directo a todas las puertas.</p>
+                  )}
+                </>
               )}
-            </label>
+            </div>
 
             <div className="formGrid">
               <label>
