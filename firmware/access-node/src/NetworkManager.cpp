@@ -13,6 +13,38 @@ const char *NVS_NAMESPACE = "accesscfg";
 Preferences prefs;
 WiFiClient wifiClient;
 EthernetClient ethClient;
+constexpr uint32_t ETH_REQUEST_TIMEOUT_MS = 3000;
+
+String urlDecode(const String &s) {
+  String out;
+  out.reserve(s.length());
+  for (size_t i = 0; i < s.length(); i++) {
+    char c = s[i];
+    if (c == '+') {
+      out += ' ';
+    } else if (c == '%' && i + 2 < s.length()) {
+      char hex[3] = {s[i + 1], s[i + 2], 0};
+      out += (char)strtol(hex, nullptr, 16);
+      i += 2;
+    } else {
+      out += c;
+    }
+  }
+  return out;
+}
+
+// Reads one "key=value" out of an application/x-www-form-urlencoded body —
+// good enough for our own fixed, known set of field names, not a general
+// parser (no repeated keys, no arrays).
+String formValue(const String &body, const char *key) {
+  String needle = String(key) + "=";
+  int start = body.indexOf(needle);
+  if (start < 0) return String();
+  start += needle.length();
+  int end = body.indexOf('&', start);
+  String raw = (end < 0) ? body.substring(start) : body.substring(start, end);
+  return urlDecode(raw);
+}
 }  // namespace
 
 void NetworkManager::loadConfig() {
@@ -161,6 +193,138 @@ void NetworkManager::startWebConfigPortal() {
                 WiFi.localIP().toString().c_str());
 }
 
+// Same 7 fields as the WiFiManager form (minus WiFi SSID/password, which
+// don't apply in Ethernet mode), rendered by hand since there's no HTML
+// templating available here. Values come from the _bufXxx buffers that
+// refreshParamBuffers() already keeps in sync with _cfg for the WiFi path
+// — reused as-is rather than duplicating that logic.
+String NetworkManager::ethConfigFormHtml() const {
+  String html;
+  html.reserve(1200);
+  html += F("<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>AccessNode config</title></head><body>"
+             "<h3>Configuracion del nodo (Ethernet)</h3>"
+             "<form method=\"POST\" action=\"/\">"
+             "Modo ('wifi' o 'eth'): <input name=\"conn_mode\" value=\"");
+  html += _bufMode;
+  html += F("\"><br>URL del backend: <input name=\"backend_url\" size=\"40\" value=\"");
+  html += _bufBackend;
+  html += F("\"><br>API key de esta puerta: <input name=\"api_key\" size=\"40\" value=\"");
+  html += _bufApiKey;
+  html += F("\"><br>Intervalo de sync (s): <input name=\"sync_s\" value=\"");
+  html += _bufSync;
+  html += F("\"><br>Duracion pulso rele (ms): <input name=\"pulse_ms\" value=\"");
+  html += _bufPulse;
+  html += F("\"><br>TZ POSIX: <input name=\"tz\" size=\"30\" value=\"");
+  html += _bufTz;
+  html += F("\"><br>Etiqueta del nodo: <input name=\"label\" value=\"");
+  html += _bufLabel;
+  html += F("\"><br><br><button type=\"submit\">Guardar</button></form>"
+             "<p>Cambiar el modo a 'wifi' aqui solo guarda esa preferencia — "
+             "para meter el SSID/contrasena de la red sigue haciendo falta "
+             "el boton de config + el AP.</p></body></html>");
+  return html;
+}
+
+void NetworkManager::applyEthFormBody(const String &body) {
+  String modeValue = formValue(body, "conn_mode");
+  modeValue.toLowerCase();
+  _cfg.connMode = (modeValue == "wifi") ? ConnMode::WIFI : ConnMode::ETHERNET;
+  _cfg.backendUrl = formValue(body, "backend_url");
+  _cfg.apiKey = formValue(body, "api_key");
+  _cfg.syncIntervalS = (uint32_t)formValue(body, "sync_s").toInt();
+  _cfg.relayPulseMs = (uint32_t)formValue(body, "pulse_ms").toInt();
+  _cfg.tz = formValue(body, "tz");
+  _cfg.doorLabel = formValue(body, "label");
+  if (_cfg.syncIntervalS < 10) _cfg.syncIntervalS = DEFAULT_SYNC_INTERVAL_S;
+  if (_cfg.relayPulseMs < 100) _cfg.relayPulseMs = DEFAULT_RELAY_PULSE_MS;
+  if (_cfg.tz.length() == 0) _cfg.tz = DEFAULT_TZ;
+}
+
+// Starts the Ethernet-side counterpart to startWebConfigPortal() — see the
+// class-level comment for why this can't just be WiFiManager again.
+void NetworkManager::startEthConfigServer() {
+  if (!ENABLE_LAN_CONFIG_PORTAL) return;
+  _ethServer.begin();
+  _ethServerActive = true;
+  Serial.print("[net] LAN config portal available at http://");
+  Serial.println(Ethernet.localIP());
+}
+
+// One request in, one response out, connection closed — no keep-alive, no
+// chunked bodies, no concurrent clients. Reads block for up to
+// ETH_REQUEST_TIMEOUT_MS per stage (mirrors SimpleHttp's style/timeouts),
+// so a slow or half-open client can briefly stall the main loop; acceptable
+// here since this only runs when someone is deliberately on the config
+// page, on the LAN, same class of tradeoff as the rest of this firmware's
+// synchronous I/O.
+void NetworkManager::handleEthClient(EthernetClient &client) {
+  client.setTimeout(ETH_REQUEST_TIMEOUT_MS);
+
+  String requestLine = client.readStringUntil('\n');
+  requestLine.trim();
+  bool isPost = requestLine.startsWith("POST");
+
+  int contentLength = 0;
+  String line;
+  do {
+    line = client.readStringUntil('\n');
+    line.trim();
+    String lower = line;
+    lower.toLowerCase();
+    if (lower.startsWith("content-length:")) {
+      contentLength = line.substring(line.indexOf(':') + 1).toInt();
+    }
+  } while (line.length() > 0 && client.connected());
+
+  String body;
+  if (isPost && contentLength > 0) {
+    body.reserve(contentLength);
+    uint32_t start = millis();
+    while ((int)body.length() < contentLength && millis() - start < ETH_REQUEST_TIMEOUT_MS) {
+      while (client.available() && (int)body.length() < contentLength) {
+        body += (char)client.read();
+      }
+      if (!client.connected() && !client.available()) break;
+    }
+  }
+
+  if (isPost) {
+    applyEthFormBody(body);
+    saveConfig();
+    client.println(F("HTTP/1.1 200 OK"));
+    client.println(F("Content-Type: text/html; charset=utf-8"));
+    client.println(F("Connection: close"));
+    client.println();
+    client.println(F("<html><body><h3>Guardado. Reiniciando...</h3></body></html>"));
+    client.flush();
+    delay(50);
+    client.stop();
+    Serial.println("[net] Config saved via Ethernet LAN portal. Rebooting shortly...");
+    _pendingRestart = true;
+    _pendingRestartAtMs = millis() + 1500;
+    return;
+  }
+
+  refreshParamBuffers();
+  String html = ethConfigFormHtml();
+  client.println(F("HTTP/1.1 200 OK"));
+  client.println(F("Content-Type: text/html; charset=utf-8"));
+  client.print(F("Content-Length: "));
+  client.println(html.length());
+  client.println(F("Connection: close"));
+  client.println();
+  client.print(html);
+  client.flush();
+  delay(50);
+  client.stop();
+}
+
+void NetworkManager::serviceEthConfigServer() {
+  EthernetClient client = _ethServer.available();
+  if (!client) return;
+  handleEthClient(client);
+}
+
 void NetworkManager::connectWifi() {
   WiFi.mode(WIFI_STA);
   WiFi.begin();  // uses credentials the ESP32 WiFi stack already persisted
@@ -221,6 +385,7 @@ void NetworkManager::begin() {
 
   if (_cfg.connMode == ConnMode::ETHERNET) {
     connectEthernet();
+    if (Ethernet.linkStatus() != LinkOFF) startEthConfigServer();
   } else {
     connectWifi();
     if (WiFi.status() == WL_CONNECTED) startWebConfigPortal();
@@ -233,6 +398,7 @@ void NetworkManager::loop() {
   }
 
   if (_webPortalActive) _wm.process();
+  if (_ethServerActive) serviceEthConfigServer();
 
   if (_cfg.connMode == ConnMode::ETHERNET) {
     Ethernet.maintain();

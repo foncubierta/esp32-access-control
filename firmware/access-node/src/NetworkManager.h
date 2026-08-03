@@ -2,6 +2,7 @@
 #include <Arduino.h>
 #include <Client.h>
 #include <WiFiManager.h>
+#include <Ethernet.h>
 
 enum class ConnMode : uint8_t { WIFI = 0, ETHERNET = 1 };
 
@@ -21,11 +22,12 @@ struct RuntimeConfig {
 // (WiFi STA or a W5500 Ethernet module) the node was configured to use.
 // First boot — or holding the config button — launches a blocking
 // WiFiManager captive portal (its own AP) to collect everything, then
-// reboots into normal operation. Once connected over WiFi, the exact same
-// form is also reachable on the LAN at the node's own IP with no AP and no
-// button — see startWebConfigPortal(). Ethernet mode doesn't get that part:
-// WiFiManager is built around the WiFi stack, so Ethernet nodes still use
-// the button+AP flow for any config change.
+// reboots into normal operation. Once connected, the exact same set of
+// fields is also reachable on the LAN at the node's own IP with no AP and
+// no button: startWebConfigPortal() over WiFi (WiFiManager's own
+// non-blocking web portal), startEthConfigServer() over Ethernet (a small
+// hand-rolled HTTP server — WiFiManager can't serve over the W5500, see
+// the comment on that method).
 class NetworkManager {
 public:
   void begin();
@@ -64,6 +66,14 @@ private:
   bool _pendingRestart = false;
   uint32_t _pendingRestartAtMs = 0;
 
+  // Minimal hand-rolled HTTP server for the LAN config page over Ethernet
+  // — arduino-libraries/Ethernet implements its own TCP/IP stack against
+  // the W5500 over SPI, entirely separate from the WiFi/lwIP stack
+  // WiFiManager's web portal is built on, so that portal simply cannot be
+  // reached over this interface.
+  EthernetServer _ethServer{80};
+  bool _ethServerActive = false;
+
   void loadConfig();
   void saveConfig();
   void setupParams();
@@ -72,6 +82,11 @@ private:
   void onParamsSaved();
   void runConfigPortal();
   void startWebConfigPortal();
+  void startEthConfigServer();
+  void serviceEthConfigServer();
+  void handleEthClient(EthernetClient &client);
+  String ethConfigFormHtml() const;
+  void applyEthFormBody(const String &body);
   void connectWifi();
   void connectEthernet();
 };

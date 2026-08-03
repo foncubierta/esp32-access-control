@@ -39,14 +39,16 @@
 #define PIN_CONFIG_BUTTON 0  // BOOT button on most ESP32 DevKit boards
 #define CONFIG_BUTTON_HOLD_MS 3000
 
-// ---- LAN config portal — once the node is connected over WiFi, the exact
-//      same form the AP portal shows (backend URL, API key, sync/pulse/TZ,
-//      WiFi credentials) is also reachable at the node's own LAN IP
-//      (printed to Serial at boot), no button or AP needed. Same
-//      plaintext-HTTP posture as the rest of this firmware (see README).
-//      Set to false to disable it and require the button+AP flow for every
-//      config change instead. WiFi-only: WiFiManager is built around the
-//      WiFi stack, so this stays off in Ethernet mode regardless.
+// ---- LAN config portal — once the node is connected (WiFi or Ethernet),
+//      the same fields the AP portal shows (backend URL, API key,
+//      sync/pulse/TZ/label — plus WiFi credentials in WiFi mode) are also
+//      reachable at the node's own LAN IP (printed to Serial at boot), no
+//      button or AP needed. WiFi mode reuses WiFiManager's own web portal;
+//      Ethernet mode is served by a small hand-rolled HTTP server instead,
+//      since WiFiManager can't run over the W5500's separate TCP/IP stack
+//      (see NetworkManager.cpp). Same plaintext-HTTP posture as the rest of
+//      this firmware (see README). Set to false to disable both and
+//      require the button+AP flow for every config change instead.
 #define ENABLE_LAN_CONFIG_PORTAL true
 
 // ---- Status LED (blinks to show WiFi/ETH + backend sync health) ----

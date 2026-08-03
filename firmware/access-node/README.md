@@ -140,25 +140,35 @@ puerta, etc.), mantén pulsado el botón de config 3 segundos al arrancar.
 
 ## Reconfigurar sin AP ni botón — portal en la LAN
 
-En cuanto el nodo conecta por WiFi, el mismo formulario del portal queda
-disponible en su propia IP dentro de la LAN, sin necesidad de conectarte a
-ningún AP ni tocar el botón de config:
+En cuanto el nodo conecta (WiFi o Ethernet), el mismo formulario del portal
+queda disponible en su propia IP dentro de la LAN, sin necesidad de
+conectarte a ningún AP ni tocar el botón de config:
 
-1. Mira la IP del nodo en el log serie (`[net] WiFi connected, IP: ...` o
+1. Mira la IP del nodo en el log serie (`[net] WiFi connected, IP: ...` /
+   `[net] Ethernet connected, IP: ...`, seguido de
    `[net] LAN config portal available at http://...`).
 2. Abre `http://<ip-del-nodo>/` desde cualquier equipo de esa misma red.
-3. Verás el mismo menú de WiFiManager que en el AP — "Configure WiFi" (para
-   cambiar de red) o el formulario de parámetros (backend, API key,
-   intervalo de sync, pulso del relé, TZ, etiqueta).
+3. En modo `wifi` verás el mismo menú de WiFiManager que en el AP —
+   "Configure WiFi" (para cambiar de red) o el formulario de parámetros
+   (backend, API key, intervalo de sync, pulso del relé, TZ, etiqueta). En
+   modo `eth` verás una página más simple con esos mismos campos (sin
+   WiFi, claro) — está servida por un mini servidor HTTP propio, no por
+   WiFiManager (ver nota técnica más abajo).
 4. Al guardar, el nodo aplica y persiste los cambios y reinicia solo a los
    pocos segundos.
 
-Solo funciona en modo `wifi` (WiFiManager está construido sobre la pila
-WiFi del ESP32) — en modo `eth` sigue haciendo falta el botón+AP para
-reconfigurar. Puedes desactivar este portal LAN por completo poniendo
+Puedes desactivar este portal LAN por completo (ambos modos) poniendo
 `ENABLE_LAN_CONFIG_PORTAL false` en `include/config.h` si prefieres exigir
 siempre el botón físico para cualquier cambio. Es HTTP plano, igual que el
 resto de este firmware — pensado para quedarse dentro de la LAN.
+
+> **Nota técnica:** en modo `eth` este portal *no* es WiFiManager — la
+> librería `arduino-libraries/Ethernet` que habla con el módulo W5500
+> implementa su propia pila TCP/IP por SPI, totalmente aparte de la pila
+> WiFi/lwIP sobre la que corre el servidor web de WiFiManager, así que ese
+> servidor no puede llegar a la interfaz Ethernet. El portal en modo `eth`
+> es un servidor HTTP mínimo hecho a mano (una sola ruta, sin keep-alive)
+> que sirve el mismo formulario.
 
 ## Modos de puerta y disparo manual
 
