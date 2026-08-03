@@ -1,10 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Plus, Pencil, Trash2, Scan } from "lucide-react";
+import { Plus, Pencil, Trash2, Scan, X as XIcon } from "lucide-react";
 import { api } from "../api.js";
 import Modal from "../components/Modal.jsx";
 
-const emptyForm = { user_id: "", group_id: "", type: "rfid", label: "", value: "", active: true, valid_from: "", valid_until: "" };
-const TYPE_LABELS = { rfid: "RFID", pin: "PIN", nfc: "NFC" };
+const emptyForm = { user_id: "", group_id: "", label: "", value: "", active: true, valid_from: "", valid_until: "" };
 const ENROLL_POLL_MS = 1000;
 const ENROLL_TIMEOUT_MS = 30000;
 
@@ -22,6 +21,8 @@ export default function CredentialsPage() {
   const [enrollMessage, setEnrollMessage] = useState("");
   const enrollPollRef = useRef(null);
   const enrollTimeoutRef = useRef(null);
+  const [extraPermissions, setExtraPermissions] = useState([]);
+  const [addingDoorId, setAddingDoorId] = useState("");
 
   const load = useCallback(() => {
     setLoading(true);
@@ -48,6 +49,27 @@ export default function CredentialsPage() {
 
   const userName = (id) => users.find((u) => u.id === id)?.full_name || `#${id}`;
   const groupName = (id) => (id == null ? null : groups.find((g) => g.id === id)?.name || `#${id}`);
+  const doorName = (id) => doors.find((d) => d.id === id)?.name || `#${id}`;
+
+  const loadExtraPermissions = useCallback((credentialId) => {
+    if (!credentialId) {
+      setExtraPermissions([]);
+      return;
+    }
+    api.permissions.list({ credential_id: credentialId }).then(setExtraPermissions);
+  }, []);
+
+  async function addExtraDoor() {
+    if (!addingDoorId || !editing?.id) return;
+    await api.permissions.create({ credential_id: editing.id, door_id: Number(addingDoorId) });
+    setAddingDoorId("");
+    loadExtraPermissions(editing.id);
+  }
+
+  async function removeExtraDoor(permissionId) {
+    await api.permissions.delete(permissionId);
+    loadExtraPermissions(editing.id);
+  }
 
   function stopEnrollPolling() {
     clearInterval(enrollPollRef.current);
@@ -102,12 +124,16 @@ export default function CredentialsPage() {
   function closeModal() {
     cancelEnroll();
     setEditing(null);
+    setExtraPermissions([]);
+    setAddingDoorId("");
   }
 
   function openCreate() {
     cancelEnroll();
     setForm(emptyForm);
     setError("");
+    setExtraPermissions([]);
+    setAddingDoorId("");
     setEditing({});
   }
 
@@ -116,7 +142,6 @@ export default function CredentialsPage() {
     setForm({
       user_id: cred.user_id,
       group_id: cred.group_id != null ? String(cred.group_id) : "",
-      type: cred.type,
       label: cred.label || "",
       value: "",
       active: cred.active,
@@ -124,7 +149,9 @@ export default function CredentialsPage() {
       valid_until: cred.valid_until ? cred.valid_until.slice(0, 10) : "",
     });
     setError("");
+    setAddingDoorId("");
     setEditing(cred);
+    loadExtraPermissions(cred.id);
   }
 
   async function save(e) {
@@ -141,13 +168,14 @@ export default function CredentialsPage() {
       if (editing.id) {
         if (!payload.value) delete payload.value;
         delete payload.user_id;
-        delete payload.type;
-        await api.credentials.update(editing.id, payload);
+        const updated = await api.credentials.update(editing.id, payload);
+        setEditing(updated);
       } else {
         if (!payload.value) throw new Error("Introduce el valor de la credencial (UID/PIN)");
-        await api.credentials.create(payload);
+        const created = await api.credentials.create(payload);
+        setEditing(created); // stays open, now with an id — se pueden añadir puertas adicionales
+        loadExtraPermissions(created.id);
       }
-      closeModal();
       load();
     } catch (err) {
       setError(err.message);
@@ -177,7 +205,6 @@ export default function CredentialsPage() {
             <tr>
               <th>Usuario</th>
               <th>Grupo</th>
-              <th>Tipo</th>
               <th>Etiqueta</th>
               <th>Vista previa</th>
               <th>Validez</th>
@@ -190,7 +217,6 @@ export default function CredentialsPage() {
               <tr key={c.id}>
                 <td>{userName(c.user_id)}</td>
                 <td className="muted">{groupName(c.group_id) || "—"}</td>
-                <td>{TYPE_LABELS[c.type] || c.type}</td>
                 <td>{c.label || "—"}</td>
                 <td>
                   <code>••••{c.value_preview}</code>
@@ -215,7 +241,7 @@ export default function CredentialsPage() {
             ))}
             {credentials.length === 0 && (
               <tr>
-                <td colSpan={8} className="muted">
+                <td colSpan={7} className="muted">
                   No hay credenciales todavía.
                 </td>
               </tr>
@@ -243,16 +269,6 @@ export default function CredentialsPage() {
                 </select>
               </label>
             )}
-            {!editing.id && (
-              <label>
-                Tipo
-                <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
-                  <option value="rfid">RFID</option>
-                  <option value="pin">PIN</option>
-                  <option value="nfc">NFC</option>
-                </select>
-              </label>
-            )}
             <label>
               Etiqueta
               <input placeholder="p.ej. Tarjeta principal" value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} />
@@ -272,27 +288,68 @@ export default function CredentialsPage() {
               {editing.id ? "Nuevo valor (dejar vacío para no cambiar)" : "Valor (UID de la tarjeta o PIN)"}
               <input value={form.value} onChange={(e) => setForm({ ...form, value: e.target.value })} placeholder={editing.id ? "sin cambios" : ""} />
             </label>
-            {form.type !== "pin" && doors.length > 0 && (
-              <div className="enrollRow">
-                <select value={enrollDoorId} onChange={(e) => setEnrollDoorId(e.target.value)} disabled={enrolling}>
-                  {doors.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.name}
-                    </option>
-                  ))}
-                </select>
-                {enrolling ? (
-                  <button type="button" className="btn" onClick={cancelEnroll}>
-                    Cancelar lectura
-                  </button>
-                ) : (
-                  <button type="button" className="btn" onClick={startEnroll}>
-                    <Scan size={16} /> Leer tarjeta
-                  </button>
-                )}
-                {enrollMessage && <span className="enrollMessage">{enrollMessage}</span>}
-              </div>
+            {doors.length > 0 && (
+              <label>
+                Leer con el lector de
+                <div className="enrollRow">
+                  <select value={enrollDoorId} onChange={(e) => setEnrollDoorId(e.target.value)} disabled={enrolling}>
+                    {doors.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.name}
+                      </option>
+                    ))}
+                  </select>
+                  {enrolling ? (
+                    <button type="button" className="btn" onClick={cancelEnroll}>
+                      Cancelar lectura
+                    </button>
+                  ) : (
+                    <button type="button" className="btn" onClick={startEnroll}>
+                      <Scan size={16} /> Leer tarjeta
+                    </button>
+                  )}
+                  {enrollMessage && <span className="enrollMessage">{enrollMessage}</span>}
+                </div>
+              </label>
             )}
+
+            <label>
+              Puertas adicionales (aparte de las del grupo)
+              {extraPermissions.length > 0 && (
+                <div className="chipList">
+                  {extraPermissions.map((p) => (
+                    <span key={p.id} className="chip">
+                      {doorName(p.door_id)}
+                      <button type="button" onClick={() => removeExtraDoor(p.id)} title="Quitar">
+                        <XIcon size={12} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              {!editing.id ? (
+                <span className="hint">Guarda la credencial primero para poder añadir puertas adicionales.</span>
+              ) : doors.filter((d) => !extraPermissions.some((p) => p.door_id === d.id)).length > 0 ? (
+                <div className="enrollRow">
+                  <select value={addingDoorId} onChange={(e) => setAddingDoorId(e.target.value)}>
+                    <option value="">Ninguna — solo el grupo</option>
+                    {doors
+                      .filter((d) => !extraPermissions.some((p) => p.door_id === d.id))
+                      .map((d) => (
+                        <option key={d.id} value={d.id}>
+                          {d.name}
+                        </option>
+                      ))}
+                  </select>
+                  <button type="button" className="btn" onClick={addExtraDoor} disabled={!addingDoorId}>
+                    <Plus size={14} /> Añadir puerta
+                  </button>
+                </div>
+              ) : (
+                doors.length > 0 && <span className="hint">Ya tiene acceso directo a todas las puertas.</span>
+              )}
+            </label>
+
             <div className="formGrid">
               <label>
                 Válida desde
@@ -309,7 +366,7 @@ export default function CredentialsPage() {
             </label>
             <div className="formActions">
               <button type="button" className="btn" onClick={closeModal}>
-                Cancelar
+                {editing.id ? "Cerrar" : "Cancelar"}
               </button>
               <button type="submit" className="btn btnPrimary">
                 Guardar

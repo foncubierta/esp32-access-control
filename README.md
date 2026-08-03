@@ -63,6 +63,8 @@ El acceso real de una credencial a una puerta es la **unión** de dos caminos in
 
 Borrar un grupo no borra sus credenciales: simplemente las deja sin grupo (`group_id = null`), y pierden el acceso que venía por ese camino (conservan cualquier permiso directo que tuvieran).
 
+El propio formulario de **Credenciales > Nueva/Editar credencial** ya deja añadir ese permiso directo sin salir a la página Permisos: una vez guardada la credencial aparece "Puertas adicionales (aparte de las del grupo)", donde puedes añadir cero, una, dos o más puertas sueltas — no es obligatorio añadir ninguna si la credencial solo necesita lo que ya le da su grupo. El campo "Tipo" (rfid/pin/nfc) se quitó del formulario porque no afecta a la evaluación de acceso; el valor sigue aceptando tanto un UID de tarjeta como un PIN indistintamente.
+
 ### Modos de puerta (vista de vigilancia)
 
 Cada `Door` tiene un `mode` que un vigilante puede cambiar en caliente desde la web (página **Vigilancia**), independiente del resultado real de la credencial:
