@@ -91,6 +91,9 @@ void NetworkManager::saveConfig() {
 void NetworkManager::setupParams() {
   refreshParamBuffers();
 
+  _pHeaderNet = new WiFiManagerParameter(
+      "<h3>Red y puerta</h3><p>Solo el WiFi de arriba hace falta ahora mismo — el resto se puede "
+      "dejar en blanco/por defecto y terminarlo luego desde <code>http://&lt;ip-del-nodo&gt;/</code>.</p>");
   _pMode = new WiFiManagerParameter("conn_mode", "Modo: 'wifi' o 'eth' (modulo W5500)", _bufMode, sizeof(_bufMode));
   _pBackend = new WiFiManagerParameter("backend_url", "URL del backend (http://host:8010)", _bufBackend, sizeof(_bufBackend));
   _pApiKey = new WiFiManagerParameter("api_key", "API key de esta puerta", _bufApiKey, sizeof(_bufApiKey));
@@ -98,6 +101,7 @@ void NetworkManager::setupParams() {
   _pPulse = new WiFiManagerParameter("pulse_ms", "Duracion pulso rele (ms)", _bufPulse, sizeof(_bufPulse));
   _pTz = new WiFiManagerParameter("tz", "TZ POSIX (ver nayarsystems/posix_tz_db)", _bufTz, sizeof(_bufTz));
   _pLabel = new WiFiManagerParameter("label", "Etiqueta del nodo (opcional)", _bufLabel, sizeof(_bufLabel));
+  _pHeaderWiring = new WiFiManagerParameter("<h3>Cableado</h3>");
   _pWgD0 = new WiFiManagerParameter("wg_d0", "Pin Wiegand D0 (GPIO, obligatorio)", _bufWgD0, sizeof(_bufWgD0));
   _pWgD1 = new WiFiManagerParameter("wg_d1", "Pin Wiegand D1 (GPIO, obligatorio)", _bufWgD1, sizeof(_bufWgD1));
   _pRelayPin = new WiFiManagerParameter("relay_pin", "Pin del rele (GPIO, obligatorio)", _bufRelayPin, sizeof(_bufRelayPin));
@@ -105,6 +109,7 @@ void NetworkManager::setupParams() {
   _pSensorPin = new WiFiManagerParameter("sensor_pin", "Pin sensor de puerta (-1 = deshabilitado)", _bufSensorPin, sizeof(_bufSensorPin));
   _pSensorCh = new WiFiManagerParameter("sensor_ch", "Sensor cerrado=HIGH? (1=si, 0=no)", _bufSensorCh, sizeof(_bufSensorCh));
 
+  _wm.addParameter(_pHeaderNet);
   _wm.addParameter(_pMode);
   _wm.addParameter(_pBackend);
   _wm.addParameter(_pApiKey);
@@ -112,6 +117,7 @@ void NetworkManager::setupParams() {
   _wm.addParameter(_pPulse);
   _wm.addParameter(_pTz);
   _wm.addParameter(_pLabel);
+  _wm.addParameter(_pHeaderWiring);
   _wm.addParameter(_pWgD0);
   _wm.addParameter(_pWgD1);
   _wm.addParameter(_pRelayPin);
@@ -233,6 +239,9 @@ void NetworkManager::startWebConfigPortal() {
   _webPortalActive = true;
   Serial.printf("[net] LAN config portal available at http://%s/ (same form as the AP portal)\n",
                 WiFi.localIP().toString().c_str());
+  if (!_cfg.isValid()) {
+    Serial.println("[net] Backend URL and/or API key not set yet — finish setup at the address above.");
+  }
 }
 
 // Same fields as the WiFiManager form (minus WiFi SSID/password, which
@@ -246,6 +255,7 @@ String NetworkManager::ethConfigFormHtml() const {
   html += F("<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>AccessNode config</title></head><body>"
              "<h3>Configuracion del nodo (Ethernet)</h3>"
              "<form method=\"POST\" action=\"/\">"
+             "<h3>Red y puerta</h3>"
              "Modo ('wifi' o 'eth'): <input name=\"conn_mode\" value=\"");
   html += _bufMode;
   html += F("\"><br>URL del backend: <input name=\"backend_url\" size=\"40\" value=\"");
@@ -260,7 +270,7 @@ String NetworkManager::ethConfigFormHtml() const {
   html += _bufTz;
   html += F("\"><br>Etiqueta del nodo: <input name=\"label\" value=\"");
   html += _bufLabel;
-  html += F("\"><br><br><b>Wiring</b><br>"
+  html += F("\"><br><br><h3>Cableado</h3>"
              "Pin Wiegand D0: <input name=\"wg_d0\" size=\"4\" value=\"");
   html += _bufWgD0;
   html += F("\"><br>Pin Wiegand D1: <input name=\"wg_d1\" size=\"4\" value=\"");
@@ -309,6 +319,9 @@ void NetworkManager::startEthConfigServer() {
   _ethServerActive = true;
   Serial.print("[net] LAN config portal available at http://");
   Serial.println(Ethernet.localIP());
+  if (!_cfg.isValid()) {
+    Serial.println("[net] Backend URL and/or API key not set yet — finish setup at the address above.");
+  }
 }
 
 // One request in, one response out, connection closed — no keep-alive, no
@@ -440,7 +453,21 @@ void NetworkManager::begin() {
     forcePortal = (millis() - start >= CONFIG_BUTTON_HOLD_MS);
   }
 
-  if (!_cfg.isValid() || forcePortal) {
+  // Only actual WiFi credentials gate the AP portal — RuntimeConfig::isValid()
+  // (backend URL + API key) deliberately does NOT, otherwise a blank API
+  // key would trap the node in AP mode forever, since it'd never reach
+  // connectWifi() to even become reachable on the LAN. Backend URL, API
+  // key, sync/pulse/TZ/label and the wiring pins all have safe defaults or
+  // tolerate being blank for now — the intended flow is: set WiFi here
+  // once, then finish the rest from the LAN portal once it's reachable at
+  // its real address (see NetworkManager's class comment / the README).
+  bool needsWifiCreds = false;
+  if (_cfg.connMode == ConnMode::WIFI) {
+    WiFi.mode(WIFI_STA);  // lets WiFi.SSID() read back whatever's already persisted, without connecting yet
+    needsWifiCreds = (WiFi.SSID().length() == 0);
+  }
+
+  if (needsWifiCreds || forcePortal) {
     runConfigPortal();  // blocks, then reboots — never returns normally
   }
 

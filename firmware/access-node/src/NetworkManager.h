@@ -86,6 +86,12 @@ private:
   char _bufRelayAh[4];
   char _bufSensorPin[4];
   char _bufSensorCh[4];
+  // Raw-HTML params (WiFiManagerParameter's single-argument constructor
+  // renders arbitrary HTML instead of an input field) — used purely as
+  // section headers to visually split the flat params list into
+  // categories, no value to read back.
+  WiFiManagerParameter *_pHeaderNet = nullptr;
+  WiFiManagerParameter *_pHeaderWiring = nullptr;
   WiFiManagerParameter *_pMode = nullptr;
   WiFiManagerParameter *_pBackend = nullptr;
   WiFiManagerParameter *_pApiKey = nullptr;
