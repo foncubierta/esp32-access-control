@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from sqlmodel import Session, select
 
 import audit
+import licensing
 from database import get_session
 from models import AdminUser
 from security import verify_password, hash_password
@@ -35,6 +36,7 @@ def login(body: LoginRequest, session: Session = Depends(get_session)):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     token = create_access_token(admin.username)
     audit.log(session, admin.username, "login_success", "admin_account", f"«{admin.username}» inició sesión", entity_id=admin.id, entity_label=admin.username)
+    licensing.enforce(session, admin.username)
     return LoginResponse(access_token=token)
 
 

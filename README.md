@@ -189,6 +189,9 @@ DELETE /api/permissions/:id          Borrar permiso
 GET    /api/logs?door_id=&credential_id=&result=&since=&limit=   Ver logs de acceso
 
 GET    /api/audit-log?actor=&action=&entity_type=&entity_id=&q=&since=&until=&limit=   Ver auditoría de cambios en el panel
+
+GET    /api/license                 Estado de la licencia instalada (válida, puertas usadas/permitidas, cliente, caducidad)
+PUT    /api/license                 Instalar una licencia nueva ({ token })
 ```
 
 ### Nodo ESP32 (header `X-Api-Key: <api_key de la puerta>`)
@@ -198,6 +201,43 @@ GET    /api/node/sync        Credenciales (hasheadas) + modo, válidas para esta
 GET    /api/node/mode        Poll ligero y frecuente de door_active/door_mode (sin la lista de credenciales)
 POST   /api/node/logs        Sube en lote los eventos de acceso registrados offline
 POST   /api/node/heartbeat   Marca el nodo como visto (last_seen)
+```
+
+## Licencias
+
+El número de puertas (nodos ESP32) que puede tener activas un despliegue se
+controla con una licencia: un token firmado (JWT, Ed25519) que solo el
+vendedor puede emitir. El cliente no tiene acceso SSH ni a la base de datos
+del servidor, así que la firma no protege contra manipulación directa —
+protege contra que se active más puertas de las contratadas simplemente
+editando un valor.
+
+- **Sin licencia instalada, caducada o con firma inválida: 0 puertas.** No
+  hay nivel gratuito — el sistema no deja crear ninguna puerta hasta que
+  hay una licencia válida.
+- Si se instala una licencia con menos puertas de las que ya existen (o la
+  licencia caduca con el servidor encendido), las puertas más recientes se
+  **desactivan automáticamente** hasta encajar en el nuevo límite — nunca
+  se borra nada, solo quedan inactivas. Esto se comprueba al arrancar el
+  backend y en cada login de un admin.
+- La página **Licencia** del panel muestra el estado (válida/caducada/sin
+  instalar, puertas en uso, cliente, fecha de caducidad) y permite pegar un
+  token nuevo.
+
+Emitir licencias es cosa del vendedor, con la herramienta
+[`license-tool/`](license-tool/README.md) (no se despliega en el servidor
+del cliente):
+
+```bash
+cd license-tool
+python3 -m venv .venv && source .venv/bin/activate
+pip install cryptography pyjwt
+
+python3 generate_keypair.py                 # una sola vez; NUNCA subir la clave privada a git
+cp keys/public_key.pem ../backend/license_public_key.pem   # sí se commitea — solo sirve para verificar
+
+python3 generate_license.py --max-doors 3 --customer "Acme S.L." --expires-days 365
+# imprime el token → pégalo en la página Licencia del cliente
 ```
 
 ## Firmware ESP32

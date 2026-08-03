@@ -108,6 +108,17 @@ class AuditLog(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
+class License(SQLModel, table=True):
+    """The currently installed license token. Single-row table — installing
+    a new license overwrites this one; what was installed before is still
+    visible in AuditLog. The token is a signed JWT (see licensing.py) —
+    nothing in it is trusted until the signature is verified against the
+    vendor's public key."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    token: str
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
 class AccessLog(SQLModel, table=True):
     """Access attempt reported by a node, synced up in batches."""
     id: Optional[int] = Field(default=None, primary_key=True)

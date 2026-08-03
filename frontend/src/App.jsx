@@ -9,6 +9,7 @@ import DoorsPage from "./pages/DoorsPage.jsx";
 import LogsPage from "./pages/LogsPage.jsx";
 import AuditLogPage from "./pages/AuditLogPage.jsx";
 import GuardPage from "./pages/GuardPage.jsx";
+import LicensePage from "./pages/LicensePage.jsx";
 
 export default function App() {
   return (
@@ -30,6 +31,7 @@ export default function App() {
         <Route path="logs" element={<LogsPage />} />
         <Route path="audit" element={<AuditLogPage />} />
         <Route path="guard" element={<GuardPage />} />
+        <Route path="license" element={<LicensePage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

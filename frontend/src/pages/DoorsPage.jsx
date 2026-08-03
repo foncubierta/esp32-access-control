@@ -21,6 +21,7 @@ export default function DoorsPage() {
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState("");
   const [revealed, setRevealed] = useState({});
+  const [license, setLicense] = useState(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -29,6 +30,7 @@ export default function DoorsPage() {
       .then(setDoors)
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
+    api.license.get().then(setLicense).catch(() => {});
   }, []);
 
   useEffect(load, [load]);
@@ -95,14 +97,23 @@ export default function DoorsPage() {
     navigator.clipboard?.writeText(key);
   }
 
+  const atLimit = license && (!license.valid || license.used_doors >= license.max_doors);
+
   return (
     <div className="page">
       <div className="pageHeader">
         <h1>Puertas / Nodos</h1>
-        <button type="button" className="btn btnPrimary" onClick={openCreate}>
+        <button type="button" className="btn btnPrimary" onClick={openCreate} disabled={atLimit} title={atLimit ? "Límite de licencia alcanzado" : undefined}>
           <Plus size={16} /> Nueva puerta
         </button>
       </div>
+      {atLimit && (
+        <p className="formError">
+          {license.valid
+            ? `Se alcanzó el límite de la licencia (${license.max_doors} puerta(s)). Ve a "Licencia" para instalar una con más puertas.`
+            : `No hay ninguna licencia válida instalada — no se pueden crear puertas. Ve a "Licencia" para instalar una.`}
+        </p>
+      )}
       {loading ? (
         <p className="muted">Cargando...</p>
       ) : (

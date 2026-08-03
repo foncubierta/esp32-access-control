@@ -6,6 +6,7 @@ from sqlmodel import Session, select
 
 import audit
 import enrollment
+import licensing
 from database import get_session
 from models import Door, Permission, AdminUser
 from dependencies import get_current_admin
@@ -82,6 +83,16 @@ def list_doors(session: Session = Depends(get_session)):
 
 @router.post("", response_model=DoorOut)
 def create_door(body: DoorCreate, admin: AdminUser = Depends(get_current_admin), session: Session = Depends(get_session)):
+    status = licensing.get_status(session)
+    max_doors = status["max_doors"] if status["valid"] else 0
+    used_doors = len(session.exec(select(Door).where(Door.active == True)).all())  # noqa: E712
+    if used_doors >= max_doors:
+        detail = (
+            "No hay ninguna licencia válida instalada — no se pueden crear puertas."
+            if max_doors == 0
+            else f"Se alcanzó el límite de la licencia ({max_doors} puerta(s)). Instala una licencia con más puertas para añadir otra."
+        )
+        raise HTTPException(status_code=402, detail=detail)
     door = Door(**body.model_dump(), api_key=generate_api_key())
     session.add(door)
     session.commit()

@@ -112,4 +112,8 @@ export const api = {
   auditLog: {
     list: (params) => req(withQuery("/audit-log", params)),
   },
+  license: {
+    get: () => req("/license"),
+    install: (token) => req("/license", { method: "PUT", body: JSON.stringify({ token }) }),
+  },
 };

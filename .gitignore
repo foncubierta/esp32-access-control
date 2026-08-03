@@ -10,4 +10,7 @@ frontend/dist/
 firmware/**/.pio/
 firmware/**/.vscode/
 
+license-tool/*.pem
+license-tool/keys/
+
 .DS_Store

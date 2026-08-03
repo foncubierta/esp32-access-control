@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
-import { Users, KeyRound, Layers, DoorOpen, ScrollText, LogOut, Eye, Lock, History } from "lucide-react";
+import { Users, KeyRound, Layers, DoorOpen, ScrollText, LogOut, Eye, Lock, History, Award } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import ChangePasswordModal from "./ChangePasswordModal.jsx";
 
@@ -12,6 +12,7 @@ const NAV = [
   { to: "/guard", label: "Vigilancia", icon: Eye },
   { to: "/logs", label: "Logs", icon: ScrollText },
   { to: "/audit", label: "Auditoría", icon: History },
+  { to: "/license", label: "Licencia", icon: Award },
 ];
 
 export default function Layout() {

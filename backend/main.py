@@ -8,8 +8,10 @@ from sqlmodel import Session, select
 from database import create_db, engine
 from models import AdminUser
 from security import hash_password
+import licensing
 
 from routers import auth, users, credentials, doors, permissions, groups, logs, audit, node
+from routers import license as license_router
 
 
 def seed_admin():
@@ -29,6 +31,8 @@ def seed_admin():
 async def lifespan(app: FastAPI):
     create_db()
     seed_admin()
+    with Session(engine) as session:
+        licensing.enforce(session, actor="system")
     yield
 
 
@@ -51,6 +55,7 @@ app.include_router(groups.router)
 app.include_router(logs.router)
 app.include_router(audit.router)
 app.include_router(node.router)
+app.include_router(license_router.router)
 
 
 @app.get("/api/health")
