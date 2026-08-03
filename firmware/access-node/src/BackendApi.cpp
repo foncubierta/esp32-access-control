@@ -171,3 +171,20 @@ bool BackendApi::heartbeat() {
   HttpResponse resp = SimpleHttp::request(Network.client(), host, port, "/api/node/heartbeat", "POST", Network.config().apiKey, "{}");
   return resp.statusCode == 200;
 }
+
+bool BackendApi::reportSensor(bool open, bool forced) {
+  if (!Network.isConnected()) return false;
+
+  String host;
+  uint16_t port;
+  if (!parseHostPort(Network.config().backendUrl, host, port)) return false;
+
+  JsonDocument doc;
+  doc["open"] = open;
+  doc["forced"] = forced;
+  String body;
+  serializeJson(doc, body);
+
+  HttpResponse resp = SimpleHttp::request(Network.client(), host, port, "/api/node/sensor", "POST", Network.config().apiKey, body);
+  return resp.statusCode == 200;
+}

@@ -190,3 +190,35 @@ def heartbeat(door: Door = Depends(get_current_door), session: Session = Depends
     session.add(door)
     session.commit()
     return {"ok": True}
+
+
+class SensorReport(BaseModel):
+    open: bool
+    forced: bool = False  # only meaningful when open=True — no preceding granted access/manual trigger
+
+
+@router.post("/sensor")
+def report_sensor(body: SensorReport, door: Door = Depends(get_current_door), session: Session = Depends(get_session)):
+    """Pushed by the node the moment its door-position sensor changes state
+    — edge-triggered, not polled, so a forced-open reaches the panel within
+    moments instead of waiting for the next mode/sync cycle. `forced` is
+    always cleared back to false as soon as the sensor reports closed
+    again; the "held open too long" alert isn't decided here at all — it's
+    computed on read from sensor_since, same as the online/offline status
+    (see doors.py:_door_alert)."""
+    now = datetime.now(timezone.utc)
+    if door.sensor_open != body.open:
+        door.sensor_since = now  # only reset the clock on an actual transition, not a duplicate report
+    door.sensor_open = body.open
+    door.sensor_forced = body.forced if body.open else False
+    door.last_seen = now
+    session.add(door)
+    session.commit()
+
+    if body.open and body.forced:
+        session.add(
+            AccessLog(door_id=door.id, result="denied", reason="door_forced", door_mode=door.mode, event_time=now)
+        )
+        session.commit()
+
+    return {"ok": True}

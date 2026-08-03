@@ -26,4 +26,8 @@ bool reportEnrollment(const String &rawValue, uint8_t bitCount);
 // POST /api/node/heartbeat
 bool heartbeat();
 
+// POST /api/node/sensor — pushed immediately (with a short retry from
+// main.cpp) whenever the door-position sensor's debounced state changes.
+bool reportSensor(bool open, bool forced);
+
 }  // namespace BackendApi

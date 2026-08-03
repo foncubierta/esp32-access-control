@@ -59,6 +59,22 @@ El contacto NO del relé se cablea en paralelo al pulsador físico de
 START/PED de la placa de control. `RELAY_ACTIVE_HIGH` en `config.h` indica
 si tu módulo dispara con HIGH o LOW.
 
+### Sensor de puerta (contacto magnético, opcional)
+
+| Sensor | ESP32 |
+|---|---|
+| Un terminal | GPIO configurable (`PIN_DOOR_SENSOR`, `-1` = deshabilitado) |
+| Otro terminal | GND |
+
+Sin resistencia externa — usa el pull-up interno. Deshabilitado por
+defecto (`PIN_DOOR_SENSOR -1`); asígnale un GPIO libre para activarlo. La
+mayoría de sensores de puerta llevan el imán en la hoja móvil y cierran el
+contacto cuando la puerta está cerrada, lo que deja el pin en LOW (cerrada)
+/ HIGH (abierta) con el pull-up interno — es el valor por defecto
+(`DOOR_SENSOR_CLOSED_HIGH false`). Si el tuyo está al revés, cambia ese
+flag. Ver la lógica de detección de "puerta forzada" vs "abierta demasiado
+tiempo" en el README principal del proyecto, sección "Sensor de puerta".
+
 ### Ethernet (módulo W5500, opcional — solo si el nodo se configura en modo "eth")
 
 | W5500 | ESP32 (VSPI) |
@@ -159,3 +175,7 @@ web se cumplen aunque el servidor esté en UTC.
 - Un lector y un relé por nodo. Para una puerta con lector de entrada y
   salida, o doble relé (abrir/cerrar por separado), habría que extender
   `WiegandReader`/`RelayController` — pídelo si lo necesitas.
+- El reporte del sensor de puerta (`POST /api/node/sensor`) no pasa por la
+  cola de logs — es de mejor esfuerzo con un reintento corto. Si el nodo
+  está sin red durante todo el episodio (se abre y se cierra sin
+  conectividad), ese episodio en concreto no llega a reportarse nunca.

@@ -21,6 +21,8 @@ DOOR_FIELD_LABELS = {
     "description": "Descripción",
     "active": "Activa",
     "mode": "Modo",
+    "sensor_enabled": "Sensor de puerta",
+    "door_open_alert_s": "Aviso de puerta abierta (s)",
 }
 
 # The node's heartbeat is the tightest guaranteed update to last_seen (fixed
@@ -47,6 +49,8 @@ class DoorUpdate(BaseModel):
     description: Optional[str] = None
     active: Optional[bool] = None
     mode: Optional[str] = None
+    sensor_enabled: Optional[bool] = None
+    door_open_alert_s: Optional[int] = None
 
 
 class DoorOut(BaseModel):
@@ -61,6 +65,11 @@ class DoorOut(BaseModel):
     last_seen: Optional[datetime] = None
     created_at: datetime
     online: bool  # last_seen within ONLINE_THRESHOLD_S — not a stored column
+    sensor_enabled: bool
+    door_open_alert_s: int
+    sensor_open: Optional[bool] = None
+    sensor_since: Optional[datetime] = None
+    door_alert: Optional[str] = None  # "forced" | "held_open" | None — computed, not stored
 
 
 def _is_online(last_seen: Optional[datetime]) -> bool:
@@ -71,8 +80,28 @@ def _is_online(last_seen: Optional[datetime]) -> bool:
     return (datetime.now(timezone.utc) - last_seen).total_seconds() < ONLINE_THRESHOLD_S
 
 
+def _door_alert(door: Door) -> Optional[str]:
+    """Same spirit as _is_online(): derived fresh on every read from
+    last-known state + a timestamp, never trusted as a value someone wrote
+    down earlier — a sensor_open=True row that's an hour stale (node gone
+    dark) still correctly resolves through online=False elsewhere, but the
+    alert itself only cares about elapsed time since the last change."""
+    if not door.sensor_enabled or door.sensor_open is not True:
+        return None
+    if door.sensor_forced:
+        return "forced"
+    if door.sensor_since is None:
+        return None
+    since = door.sensor_since
+    if since.tzinfo is None:
+        since = since.replace(tzinfo=timezone.utc)
+    if (datetime.now(timezone.utc) - since).total_seconds() > door.door_open_alert_s:
+        return "held_open"
+    return None
+
+
 def _door_out(door: Door) -> DoorOut:
-    return DoorOut(**door.model_dump(), online=_is_online(door.last_seen))
+    return DoorOut(**door.model_dump(), online=_is_online(door.last_seen), door_alert=_door_alert(door))
 
 
 @router.get("", response_model=List[DoorOut])
@@ -109,6 +138,8 @@ def update_door(
     if not door:
         raise HTTPException(status_code=404, detail="Door not found")
     _validate_mode(body.mode)
+    if body.door_open_alert_s is not None and body.door_open_alert_s <= 0:
+        raise HTTPException(status_code=400, detail="door_open_alert_s must be greater than 0")
     updates = body.model_dump(exclude_unset=True)
     before = {key: getattr(door, key) for key in updates}
     for key, value in updates.items():

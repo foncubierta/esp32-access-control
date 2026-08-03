@@ -1,11 +1,20 @@
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Pencil, Trash2, Eye, EyeOff, Copy, RefreshCw, Wifi, WifiOff } from "lucide-react";
+import { Plus, Pencil, Trash2, Eye, EyeOff, Copy, RefreshCw, Wifi, WifiOff, ShieldAlert, Clock } from "lucide-react";
 import { api } from "../api.js";
 import Modal from "../components/Modal.jsx";
 
-const emptyForm = { name: "", location: "", description: "", active: true, mode: "auto" };
+const emptyForm = {
+  name: "",
+  location: "",
+  description: "",
+  active: true,
+  mode: "auto",
+  sensor_enabled: false,
+  door_open_alert_s: 30,
+};
 
 const MODE_LABELS = { auto: "Automático", open: "Abierto", closed: "Cerrado", identify: "Identificación" };
+const DOOR_ALERT_LABELS = { forced: "Forzada", held_open: "Abierta" };
 const DOORS_POLL_MS = 15000;
 
 function formatLastSeen(value) {
@@ -55,6 +64,8 @@ export default function DoorsPage() {
       description: door.description || "",
       active: door.active,
       mode: door.mode || "auto",
+      sensor_enabled: door.sensor_enabled || false,
+      door_open_alert_s: door.door_open_alert_s || 30,
     });
     setError("");
     setEditing(door);
@@ -65,7 +76,7 @@ export default function DoorsPage() {
     setError("");
     try {
       if (editing.id) {
-        await api.doors.update(editing.id, form);
+        await api.doors.update(editing.id, { ...form, door_open_alert_s: Number(form.door_open_alert_s) });
       } else {
         await api.doors.create(form);
       }
@@ -127,6 +138,7 @@ export default function DoorsPage() {
               <th>Últ. sincronización</th>
               <th>Estado</th>
               <th>Modo</th>
+              <th>Puerta</th>
               <th></th>
             </tr>
           </thead>
@@ -163,6 +175,19 @@ export default function DoorsPage() {
                   <span className={`badge ${d.active ? "badgeSuccess" : "badgeMuted"}`}>{d.active ? "Activa" : "Bloqueada"}</span>
                 </td>
                 <td className="muted">{MODE_LABELS[d.mode] || d.mode || "Automático"}</td>
+                <td>
+                  {d.door_alert ? (
+                    <span
+                      className={`badge ${d.door_alert === "forced" ? "badgeDanger" : "badgeWarning"}`}
+                      title={d.door_alert === "forced" ? "Se abrió sin un tránsito autorizado previo" : `Lleva abierta más de ${d.door_open_alert_s}s`}
+                    >
+                      {d.door_alert === "forced" ? <ShieldAlert size={12} /> : <Clock size={12} />}
+                      {DOOR_ALERT_LABELS[d.door_alert]}
+                    </span>
+                  ) : (
+                    <span className="muted">—</span>
+                  )}
+                </td>
                 <td className="rowActions">
                   <button type="button" className="iconBtn" onClick={() => openEdit(d)}>
                     <Pencil size={16} />
@@ -175,7 +200,7 @@ export default function DoorsPage() {
             ))}
             {doors.length === 0 && (
               <tr>
-                <td colSpan={8} className="muted">
+                <td colSpan={9} className="muted">
                   No hay puertas todavía.
                 </td>
               </tr>
@@ -205,16 +230,37 @@ export default function DoorsPage() {
               Activa (desactivarla bloquea todos los accesos en el siguiente sync del nodo)
             </label>
             {editing.id && (
-              <label>
-                Modo
-                <select value={form.mode} onChange={(e) => setForm({ ...form, mode: e.target.value })}>
-                  {Object.entries(MODE_LABELS).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <>
+                <label>
+                  Modo
+                  <select value={form.mode} onChange={(e) => setForm({ ...form, mode: e.target.value })}>
+                    {Object.entries(MODE_LABELS).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="checkboxRow">
+                  <input
+                    type="checkbox"
+                    checked={form.sensor_enabled}
+                    onChange={(e) => setForm({ ...form, sensor_enabled: e.target.checked })}
+                  />
+                  Sensor de puerta instalado (avisa si se abre sin tránsito o si tarda en cerrarse)
+                </label>
+                {form.sensor_enabled && (
+                  <label>
+                    Avisar si lleva abierta más de (segundos)
+                    <input
+                      type="number"
+                      min="1"
+                      value={form.door_open_alert_s}
+                      onChange={(e) => setForm({ ...form, door_open_alert_s: e.target.value })}
+                    />
+                  </label>
+                )}
+              </>
             )}
             {!editing.id && <p className="hint">Se generará una API key para el nodo al guardar — configúrala en el firmware del ESP32.</p>}
             <div className="formActions">

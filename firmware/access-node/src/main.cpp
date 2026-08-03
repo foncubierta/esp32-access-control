@@ -3,6 +3,7 @@
 #include "AccessController.h"
 #include "BackendApi.h"
 #include "CredentialHash.h"
+#include "DoorSensor.h"
 #include "EventQueue.h"
 #include "NetworkManager.h"
 #include "RelayController.h"
@@ -18,6 +19,18 @@ uint32_t lastHeartbeatMs = 0;
 constexpr uint32_t MODE_POLL_INTERVAL_MS = 2000;
 constexpr uint32_t LOG_FLUSH_INTERVAL_MS = 15000;
 constexpr uint32_t HEARTBEAT_INTERVAL_MS = 60000;
+
+// Last time the relay actually fired because of a granted card scan or a
+// granted manual "open now" — the door-sensor logic below treats an
+// opening within DOOR_OPEN_GRACE_MS of this as expected, anything later
+// (or with no prior grant at all, since millis() starts at 0) as forced.
+uint32_t lastRelayGrantMs = 0;
+
+bool sensorReportPending = false;
+bool sensorReportOpenValue = false;
+bool sensorReportForcedValue = false;
+uint32_t lastSensorReportAttemptMs = 0;
+constexpr uint32_t SENSOR_REPORT_RETRY_MS = 3000;
 
 String nowIso8601() {
   time_t t = time(nullptr);
@@ -66,6 +79,7 @@ void handleCardScan() {
   // must never delay the physical door action.
   if (pulseRelay) {
     Relay.pulse(Network.config().relayPulseMs);
+    lastRelayGrantMs = millis();
   }
 
   LogEvent ev;
@@ -111,6 +125,7 @@ void checkManualTrigger() {
   Serial.printf("[trigger] manual open requested from the guard view -> %s\n", doorActive ? "FIRED" : "ignored (door inactive)");
   if (doorActive) {
     Relay.pulse(Network.config().relayPulseMs);
+    lastRelayGrantMs = millis();
   }
 
   LogEvent ev;
@@ -125,6 +140,38 @@ void checkManualTrigger() {
     BackendApi::uploadLogs();
   }
 }
+
+// Checks the (optional) door-position sensor for a debounced state change
+// and reports it — inert entirely if PIN_DOOR_SENSOR is -1 (Sensor.poll()
+// always returns false then). An opening is "forced" when it happens more
+// than DOOR_OPEN_GRACE_MS after the last granted access/manual trigger —
+// includes the case where the door opens with no grant since boot at all,
+// since lastRelayGrantMs starts at 0. Reporting is best-effort with a short
+// retry (SENSOR_REPORT_RETRY_MS) rather than queued: if the node is
+// offline for the entire time the door is open, that particular episode is
+// never reported once it closes again — same documented v1 tradeoff as the
+// rest of this firmware's live, non-persisted reporting paths.
+void checkDoorSensor() {
+  if (!Sensor.enabled()) return;
+
+  if (Sensor.poll()) {
+    bool open = Sensor.isOpen();
+    bool forced = open && (millis() - lastRelayGrantMs > DOOR_OPEN_GRACE_MS);
+    Serial.printf("[sensor] door %s%s\n", open ? "opened" : "closed", forced ? " — FORCED, no recent granted access" : "");
+    sensorReportPending = true;
+    sensorReportOpenValue = open;
+    sensorReportForcedValue = forced;
+    lastSensorReportAttemptMs = 0;  // try to report this right away, below
+  }
+
+  if (!sensorReportPending || !Network.isConnected()) return;
+  uint32_t now = millis();
+  if (now - lastSensorReportAttemptMs < SENSOR_REPORT_RETRY_MS) return;
+  lastSensorReportAttemptMs = now;
+  if (BackendApi::reportSensor(sensorReportOpenValue, sensorReportForcedValue)) {
+    sensorReportPending = false;
+  }
+}
 }  // namespace
 
 void setup() {
@@ -137,6 +184,7 @@ void setup() {
 
   Relay.begin(PIN_RELAY, RELAY_ACTIVE_HIGH);
   Wiegand.begin(PIN_WIEGAND_D0, PIN_WIEGAND_D1);
+  Sensor.begin(PIN_DOOR_SENSOR, DOOR_SENSOR_CLOSED_HIGH, DOOR_SENSOR_DEBOUNCE_MS);  // no-op if PIN_DOOR_SENSOR is -1
 
   Network.begin();  // runs the config portal (and reboots) on first boot
 
@@ -185,4 +233,5 @@ void loop() {
   }
 
   checkManualTrigger();
+  checkDoorSensor();
 }

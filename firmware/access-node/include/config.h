@@ -17,6 +17,24 @@
 #define PIN_RELAY 27
 #define RELAY_ACTIVE_HIGH true  // flip to false if your relay module triggers on LOW
 
+// ---- Door position sensor (reed switch on the door/gate leaf) — optional.
+//      Set PIN_DOOR_SENSOR to -1 (default) to leave this feature off
+//      entirely; the node then never touches this pin or the /sensor
+//      endpoint. Wire the switch between the pin and GND and leave the
+//      internal pull-up doing the rest (no external resistor needed). Most
+//      door reed switches are wired so the magnet (on the moving leaf)
+//      keeps the contacts closed when the door is shut — that shorts the
+//      pin to GND, i.e. LOW = closed, HIGH = open. Flip the flag below if
+//      yours is wired the other way round. ----
+#define PIN_DOOR_SENSOR -1
+#define DOOR_SENSOR_CLOSED_HIGH false  // false (default/typical): LOW = closed, HIGH = open. true: the reverse.
+#define DOOR_SENSOR_DEBOUNCE_MS 100    // pin must read the same value for this long before a transition is accepted — filters contact bounce/EMI, not meant to filter out a real slow-swinging door
+// How long after a granted access (card or manual trigger actually fired
+// the relay) the door is allowed to open before it's no longer considered
+// "expected" — tune this to how slow your specific gate/door mechanism is.
+// An opening detected outside this window is reported as forced.
+#define DOOR_OPEN_GRACE_MS 15000
+
 // ---- Hold at boot to force the config portal even if valid config exists ----
 #define PIN_CONFIG_BUTTON 0  // BOOT button on most ESP32 DevKit boards
 #define CONFIG_BUTTON_HOLD_MS 3000

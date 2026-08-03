@@ -65,6 +65,17 @@ class Door(SQLModel, table=True):
     last_seen: Optional[datetime] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
+    # Door position sensor (reed switch) — optional per door, reported by
+    # the node itself via POST /api/node/sensor whenever it changes. Kept as
+    # last-known-state + when it changed, same shape as last_seen; the
+    # "should we show an alert right now" question is answered by a
+    # computed field (see doors.py:_door_alert), not stored here.
+    sensor_enabled: bool = Field(default=False)  # this node has the sensor wired and reporting
+    door_open_alert_s: int = Field(default=30)  # how long it may stay open after a granted access before "held open"
+    sensor_open: Optional[bool] = None  # last reported physical state — None until first report
+    sensor_since: Optional[datetime] = None  # when sensor_open last changed
+    sensor_forced: bool = Field(default=False)  # current opening was detected with no preceding granted access
+
 
 class Permission(SQLModel, table=True):
     """Grants a credential access to a door, optionally restricted to days/hours."""

@@ -17,6 +17,11 @@ _MIGRATIONS = [
     "ALTER TABLE user ADD COLUMN address TEXT",
     "ALTER TABLE user ADD COLUMN photo_path TEXT",
     "ALTER TABLE credential ADD COLUMN group_id INTEGER REFERENCES credentialgroup(id)",
+    "ALTER TABLE door ADD COLUMN sensor_enabled BOOLEAN NOT NULL DEFAULT 0",
+    "ALTER TABLE door ADD COLUMN door_open_alert_s INTEGER NOT NULL DEFAULT 30",
+    "ALTER TABLE door ADD COLUMN sensor_open BOOLEAN",
+    "ALTER TABLE door ADD COLUMN sensor_since TIMESTAMP",
+    "ALTER TABLE door ADD COLUMN sensor_forced BOOLEAN NOT NULL DEFAULT 0",
 ]
 
 

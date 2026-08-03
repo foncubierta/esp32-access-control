@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { DoorOpen, DoorClosed, ScanEye, Zap, Unlock, Wifi, WifiOff } from "lucide-react";
+import { DoorOpen, DoorClosed, ScanEye, Zap, Unlock, Wifi, WifiOff, ShieldAlert, Clock } from "lucide-react";
 import { api } from "../api.js";
 
 const MODES = [
@@ -87,6 +87,7 @@ export default function GuardPage() {
 
   function personLabel(ev) {
     if (ev.reason === "manual_trigger") return "Abierto por el vigilante";
+    if (ev.reason === "door_forced") return "Puerta forzada (sin tránsito)";
     return credentialInfo(ev.credential_id)?.userName || "Tarjeta desconocida";
   }
 
@@ -130,6 +131,12 @@ export default function GuardPage() {
                 {door.online ? "En línea" : "Sin conexión"}
               </span>
             )}
+            {door?.door_alert && (
+              <span className={`badge ${door.door_alert === "forced" ? "badgeDanger" : "badgeWarning"}`}>
+                {door.door_alert === "forced" ? <ShieldAlert size={12} /> : <Clock size={12} />}
+                {door.door_alert === "forced" ? "Puerta forzada" : "Abierta demasiado tiempo"}
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -141,6 +148,16 @@ export default function GuardPage() {
           {!door.online && (
             <p className="offlineWarning">
               Este nodo no ha dado señal en los últimos minutos — los cambios de modo y la apertura manual no llegarán hasta que vuelva a conectarse.
+            </p>
+          )}
+          {door.door_alert === "forced" && (
+            <p className="offlineWarning">
+              <strong>Puerta forzada:</strong> el sensor detectó que se abrió sin un tránsito autorizado previo (ni tarjeta ni apertura manual).
+            </p>
+          )}
+          {door.door_alert === "held_open" && (
+            <p className="heldOpenWarning">
+              La puerta lleva abierta más de {door.door_open_alert_s}s desde el último tránsito autorizado.
             </p>
           )}
           <div className="modeGrid">

@@ -95,6 +95,17 @@ El nodo separa la **decisión de acceso** (¿tendría paso esta credencial?) de 
 
 Esa misma página tiene un botón **"Abrir ahora"** independiente de los modos: dispara el relé una vez, en el momento, sin pasar tarjeta (`POST /api/doors/:id/trigger`). El nodo lo detecta por el mismo poll de `/api/node/mode` (campo `trigger_seq`, que sube en cada clic) y lo registra en el log con `reason=manual_trigger`.
 
+## Sensor de puerta (opcional)
+
+Cada puerta puede tener un sensor de posición (contacto magnético) en el propio ESP32 — ver el wiring en [`firmware/access-node/README.md`](firmware/access-node/README.md). Es opcional por nodo: si no está cableado, no se reporta nada y esta sección no afecta a esa puerta.
+
+El nodo distingue dos situaciones y las reporta de forma distinta:
+
+- **Puerta forzada**: el sensor detecta que se abrió sin un tránsito autorizado previo (ni tarjeta con acceso, ni "Abrir ahora") en los últimos segundos (`DOOR_OPEN_GRACE_MS` en el firmware). Se reporta **al instante** (`POST /api/node/sensor`, no espera a ningún poll periódico) y queda registrado en Logs con `reason=door_forced`.
+- **Puerta abierta demasiado tiempo**: tras un tránsito legítimo, si el sensor sigue marcando "abierta" más de `door_open_alert_s` (configurable por puerta, **Puertas/Nodos** → editar), aparece el aviso — pero no antes: nunca se avisa mientras la puerta lleva un tiempo razonable abierta tras un pase válido.
+
+Ambos se muestran como un icono/badge en **Puertas / Nodos** y como un aviso destacado en **Vigilancia**, calculados al vuelo (igual que el online/offline) a partir de `sensor_open` + `sensor_since` — no hace falta ningún poll adicional desde el panel para que se actualicen.
+
 ## Desplegar en un LXC
 
 Ver [`deploy/README.md`](deploy/README.md) — instrucciones paso a paso para Debian 12,
@@ -175,9 +186,9 @@ POST   /api/groups/permissions      Dar acceso a un grupo ({ group_id, door_id, 
 PATCH  /api/groups/permissions/:id   Editar / activar / desactivar
 DELETE /api/groups/permissions/:id   Quitar el acceso
 
-GET    /api/doors                   Listar puertas/nodos (cada una con online: bool, calculado — no se guarda)
+GET    /api/doors                   Listar puertas/nodos (cada una con online y door_alert: "forced"|"held_open"|null, calculados — no se guardan)
 POST   /api/doors                   Crear puerta (genera api_key)
-PATCH  /api/doors/:id                Editar puerta (incluye mode: auto|open|closed|identify)
+PATCH  /api/doors/:id                Editar puerta (incluye mode, sensor_enabled, door_open_alert_s)
 POST   /api/doors/:id/rotate-key     Regenerar api_key del nodo
 DELETE /api/doors/:id                Borrar puerta (cascada: permisos)
 
@@ -201,6 +212,7 @@ GET    /api/node/sync        Credenciales (hasheadas) + modo, válidas para esta
 GET    /api/node/mode        Poll ligero y frecuente de door_active/door_mode (sin la lista de credenciales)
 POST   /api/node/logs        Sube en lote los eventos de acceso registrados offline
 POST   /api/node/heartbeat   Marca el nodo como visto (last_seen)
+POST   /api/node/sensor      Reporta un cambio de estado del sensor de puerta ({ open, forced }) — al instante, no en lote
 ```
 
 ## Licencias
