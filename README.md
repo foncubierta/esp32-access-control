@@ -99,7 +99,7 @@ cp .env.example .env   # y edita SECRET_KEY / ADMIN_PASSWORD
 uvicorn main:app --host 0.0.0.0 --port 8010 --reload
 ```
 
-En el primer arranque se crea un usuario admin con `ADMIN_USERNAME` / `ADMIN_PASSWORD` (por defecto `admin` / `admin` — cámbialo).
+En el primer arranque se crea un usuario admin con `ADMIN_USERNAME` / `ADMIN_PASSWORD` (por defecto `admin` / `admin` — cámbialo). Una vez dentro, la contraseña se cambia desde el propio panel: icono de candado junto al nombre de usuario, abajo a la izquierda (requiere la contraseña actual y un mínimo de 8 caracteres para la nueva — `POST /api/auth/change-password`).
 
 ### Frontend
 
@@ -127,6 +127,7 @@ npm run build # build de producción → dist/
 ```
 POST   /api/auth/login              Login admin → { access_token }
 GET    /api/auth/me                 Admin autenticado
+POST   /api/auth/change-password    Cambiar la contraseña ({ current_password, new_password })
 
 GET    /api/users                   Listar usuarios
 POST   /api/users                   Crear usuario ({ full_name, dni?, address?, email?, phone?, ... })

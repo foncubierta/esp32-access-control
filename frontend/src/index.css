@@ -85,6 +85,8 @@ code { background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px; fo
   border-top: 1px solid var(--border);
   margin-top: 12px;
 }
+.sidebarFooter .muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sidebarFooterActions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
 
 .content { flex: 1; padding: 28px 32px; max-width: 1100px; }
 

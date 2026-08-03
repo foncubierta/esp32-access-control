@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
-import { Users, KeyRound, Layers, DoorOpen, ShieldCheck, ScrollText, LogOut, Eye } from "lucide-react";
+import { Users, KeyRound, Layers, DoorOpen, ShieldCheck, ScrollText, LogOut, Eye, Lock } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
+import ChangePasswordModal from "./ChangePasswordModal.jsx";
 
 const NAV = [
   { to: "/users", label: "Usuarios", icon: Users },
@@ -14,6 +16,7 @@ const NAV = [
 
 export default function Layout() {
   const { admin, logout } = useAuth();
+  const [changingPassword, setChangingPassword] = useState(false);
 
   return (
     <div className="layout">
@@ -29,14 +32,20 @@ export default function Layout() {
         </nav>
         <div className="sidebarFooter">
           <span className="muted">{admin?.username}</span>
-          <button type="button" className="iconBtn" title="Cerrar sesión" onClick={logout}>
-            <LogOut size={16} />
-          </button>
+          <div className="sidebarFooterActions">
+            <button type="button" className="iconBtn" title="Cambiar contraseña" onClick={() => setChangingPassword(true)}>
+              <Lock size={16} />
+            </button>
+            <button type="button" className="iconBtn" title="Cerrar sesión" onClick={logout}>
+              <LogOut size={16} />
+            </button>
+          </div>
         </div>
       </aside>
       <main className="content">
         <Outlet />
       </main>
+      {changingPassword && <ChangePasswordModal onClose={() => setChangingPassword(false)} />}
     </div>
   );
 }

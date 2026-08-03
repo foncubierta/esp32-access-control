@@ -4,7 +4,7 @@ from sqlmodel import Session, select
 
 from database import get_session
 from models import AdminUser
-from security import verify_password
+from security import verify_password, hash_password
 from auth import create_access_token
 from dependencies import get_current_admin
 
@@ -38,3 +38,24 @@ def login(body: LoginRequest, session: Session = Depends(get_session)):
 @router.get("/me", response_model=AdminOut)
 def me(admin: AdminUser = Depends(get_current_admin)):
     return AdminOut(id=admin.id, username=admin.username)
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+@router.post("/change-password")
+def change_password(
+    body: ChangePasswordRequest,
+    admin: AdminUser = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+):
+    if not verify_password(body.current_password, admin.password_hash):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="La contraseña actual no es correcta")
+    if len(body.new_password) < 8:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="La nueva contraseña debe tener al menos 8 caracteres")
+    admin.password_hash = hash_password(body.new_password)
+    session.add(admin)
+    session.commit()
+    return {"ok": True}
