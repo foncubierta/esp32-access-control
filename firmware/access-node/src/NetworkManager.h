@@ -6,6 +6,22 @@
 
 enum class ConnMode : uint8_t { WIFI = 0, ETHERNET = 1 };
 
+// arduino-libraries/Ethernet's EthernetServer declares begin() with no
+// arguments (the port is fixed at construction) — one signature short of
+// the pure virtual Server::begin(uint16_t port=0) the ESP32 Arduino core
+// requires, so plain EthernetServer is left abstract on this platform and
+// can't be instantiated. This overrides the exact signature the core
+// wants and forwards to the real begin(), ignoring the (redundant,
+// already-known) port argument.
+class ConfigEthernetServer : public EthernetServer {
+ public:
+  explicit ConfigEthernetServer(uint16_t port) : EthernetServer(port) {}
+  void begin(uint16_t port = 0) override {
+    (void)port;
+    EthernetServer::begin();
+  }
+};
+
 struct RuntimeConfig {
   ConnMode connMode = ConnMode::WIFI;
   String backendUrl;
@@ -93,7 +109,7 @@ private:
   // the W5500 over SPI, entirely separate from the WiFi/lwIP stack
   // WiFiManager's web portal is built on, so that portal simply cannot be
   // reached over this interface.
-  EthernetServer _ethServer{80};
+  ConfigEthernetServer _ethServer{80};
   bool _ethServerActive = false;
 
   void loadConfig();
