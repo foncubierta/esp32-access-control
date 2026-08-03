@@ -3,12 +3,6 @@
 
 AccessController Access;
 
-void AccessController::replaceCache(CachedCredential *items, size_t count) {
-  if (count > MAX_CACHED_CREDENTIALS) count = MAX_CACHED_CREDENTIALS;
-  for (size_t i = 0; i < count; i++) _items[i] = items[i];
-  _count = count;
-}
-
 namespace {
 bool dayListContains(const String &daysOfWeek, int today) {
   String needle = String(today);

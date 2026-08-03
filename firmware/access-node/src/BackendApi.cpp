@@ -57,10 +57,10 @@ bool BackendApi::sync() {
   const char *doorMode = doc["door_mode"] | "auto";
   JsonArray creds = doc["credentials"].as<JsonArray>();
 
-  static CachedCredential buffer[MAX_CACHED_CREDENTIALS];
+  CachedCredential *buffer = Access.cacheBuffer();
   size_t count = 0;
   for (JsonObject c : creds) {
-    if (count >= MAX_CACHED_CREDENTIALS) break;
+    if (count >= AccessController::cacheCapacity()) break;
     CachedCredential &item = buffer[count];
     item.credentialId = c["credential_id"] | 0;
     const char *valueHash = c["value_hash"] | "";
@@ -78,7 +78,7 @@ bool BackendApi::sync() {
     count++;
   }
 
-  Access.replaceCache(buffer, count);
+  Access.commitCache(count);
   Access.setDoorActive(doorActive);
   Access.setMode(String(doorMode));
   Access.setTriggerSeq(doc["trigger_seq"] | 0);

@@ -27,7 +27,17 @@ struct AccessDecision {
 // network outage between syncs.
 class AccessController {
  public:
-  void replaceCache(CachedCredential *items, size_t count);
+  // BackendApi::sync() writes new entries directly into this buffer
+  // (capacity cacheCapacity()) and then calls commitCache() — this table
+  // is already the single largest static allocation in the firmware,
+  // building a second MAX_CACHED_CREDENTIALS-sized array elsewhere just to
+  // copy from it doesn't fit in DRAM alongside everything else (confirmed:
+  // that used to be exactly what BackendApi::sync() did, and it overflowed
+  // the link by ~16KB).
+  CachedCredential *cacheBuffer() { return _items; }
+  static constexpr size_t cacheCapacity() { return MAX_CACHED_CREDENTIALS; }
+  void commitCache(size_t count) { _count = (count > MAX_CACHED_CREDENTIALS) ? MAX_CACHED_CREDENTIALS : count; }
+
   size_t cachedCount() const { return _count; }
 
   void setDoorActive(bool active) { _doorActive = active; }
