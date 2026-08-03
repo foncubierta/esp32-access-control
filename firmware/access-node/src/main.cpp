@@ -142,9 +142,9 @@ void checkManualTrigger() {
 }
 
 // Checks the (optional) door-position sensor for a debounced state change
-// and reports it — inert entirely if PIN_DOOR_SENSOR is -1 (Sensor.poll()
-// always returns false then). An opening is "forced" when it happens more
-// than DOOR_OPEN_GRACE_MS after the last granted access/manual trigger —
+// and reports it — inert entirely if the configured sensor pin is -1
+// (Sensor.poll() always returns false then). An opening is "forced" when
+// it happens more than DOOR_OPEN_GRACE_MS after the last granted access/manual trigger —
 // includes the case where the door opens with no grant since boot at all,
 // since lastRelayGrantMs starts at 0. Reporting is best-effort with a short
 // retry (SENSOR_REPORT_RETRY_MS) rather than queued: if the node is
@@ -182,11 +182,12 @@ void setup() {
   pinMode(PIN_STATUS_LED, OUTPUT);
   digitalWrite(PIN_STATUS_LED, LOW);
 
-  Relay.begin(PIN_RELAY, RELAY_ACTIVE_HIGH);
-  Wiegand.begin(PIN_WIEGAND_D0, PIN_WIEGAND_D1);
-  Sensor.begin(PIN_DOOR_SENSOR, DOOR_SENSOR_CLOSED_HIGH, DOOR_SENSOR_DEBOUNCE_MS);  // no-op if PIN_DOOR_SENSOR is -1
+  Network.begin();  // loads persisted config (or runs the portal + reboots) — the wiring below reads from it
 
-  Network.begin();  // runs the config portal (and reboots) on first boot
+  const RuntimeConfig &netCfg = Network.config();
+  Relay.begin((uint8_t)netCfg.relayPin, netCfg.relayActiveHigh);
+  Wiegand.begin((uint8_t)netCfg.wiegandD0Pin, (uint8_t)netCfg.wiegandD1Pin);
+  Sensor.begin(netCfg.doorSensorPin, netCfg.doorSensorClosedHigh, DOOR_SENSOR_DEBOUNCE_MS);  // no-op if the pin is -1
 
   if (Network.isConnected()) {
     if (!TimeUtil::syncNtp(Network.config().tz)) {

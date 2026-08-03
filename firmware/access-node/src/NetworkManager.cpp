@@ -56,6 +56,12 @@ void NetworkManager::loadConfig() {
   _cfg.relayPulseMs = prefs.getUInt("pulse_ms", DEFAULT_RELAY_PULSE_MS);
   _cfg.tz = prefs.getString("tz", DEFAULT_TZ);
   _cfg.doorLabel = prefs.getString("label", "");
+  _cfg.wiegandD0Pin = (int8_t)prefs.getInt("wg_d0", DEFAULT_PIN_WIEGAND_D0);
+  _cfg.wiegandD1Pin = (int8_t)prefs.getInt("wg_d1", DEFAULT_PIN_WIEGAND_D1);
+  _cfg.relayPin = (int8_t)prefs.getInt("relay_pin", DEFAULT_PIN_RELAY);
+  _cfg.relayActiveHigh = prefs.getUChar("relay_ah", DEFAULT_RELAY_ACTIVE_HIGH ? 1 : 0) != 0;
+  _cfg.doorSensorPin = (int8_t)prefs.getInt("sensor_pin", DEFAULT_PIN_DOOR_SENSOR);
+  _cfg.doorSensorClosedHigh = prefs.getUChar("sensor_ch", DEFAULT_DOOR_SENSOR_CLOSED_HIGH ? 1 : 0) != 0;
   prefs.end();
 }
 
@@ -68,6 +74,12 @@ void NetworkManager::saveConfig() {
   prefs.putUInt("pulse_ms", _cfg.relayPulseMs);
   prefs.putString("tz", _cfg.tz);
   prefs.putString("label", _cfg.doorLabel);
+  prefs.putInt("wg_d0", _cfg.wiegandD0Pin);
+  prefs.putInt("wg_d1", _cfg.wiegandD1Pin);
+  prefs.putInt("relay_pin", _cfg.relayPin);
+  prefs.putUChar("relay_ah", _cfg.relayActiveHigh ? 1 : 0);
+  prefs.putInt("sensor_pin", _cfg.doorSensorPin);
+  prefs.putUChar("sensor_ch", _cfg.doorSensorClosedHigh ? 1 : 0);
   prefs.end();
 }
 
@@ -86,6 +98,12 @@ void NetworkManager::setupParams() {
   _pPulse = new WiFiManagerParameter("pulse_ms", "Duracion pulso rele (ms)", _bufPulse, sizeof(_bufPulse));
   _pTz = new WiFiManagerParameter("tz", "TZ POSIX (ver nayarsystems/posix_tz_db)", _bufTz, sizeof(_bufTz));
   _pLabel = new WiFiManagerParameter("label", "Etiqueta del nodo (opcional)", _bufLabel, sizeof(_bufLabel));
+  _pWgD0 = new WiFiManagerParameter("wg_d0", "Pin Wiegand D0 (GPIO, obligatorio)", _bufWgD0, sizeof(_bufWgD0));
+  _pWgD1 = new WiFiManagerParameter("wg_d1", "Pin Wiegand D1 (GPIO, obligatorio)", _bufWgD1, sizeof(_bufWgD1));
+  _pRelayPin = new WiFiManagerParameter("relay_pin", "Pin del rele (GPIO, obligatorio)", _bufRelayPin, sizeof(_bufRelayPin));
+  _pRelayAh = new WiFiManagerParameter("relay_ah", "Rele activo en HIGH? (1=si, 0=no)", _bufRelayAh, sizeof(_bufRelayAh));
+  _pSensorPin = new WiFiManagerParameter("sensor_pin", "Pin sensor de puerta (-1 = deshabilitado)", _bufSensorPin, sizeof(_bufSensorPin));
+  _pSensorCh = new WiFiManagerParameter("sensor_ch", "Sensor cerrado=HIGH? (1=si, 0=no)", _bufSensorCh, sizeof(_bufSensorCh));
 
   _wm.addParameter(_pMode);
   _wm.addParameter(_pBackend);
@@ -94,6 +112,12 @@ void NetworkManager::setupParams() {
   _wm.addParameter(_pPulse);
   _wm.addParameter(_pTz);
   _wm.addParameter(_pLabel);
+  _wm.addParameter(_pWgD0);
+  _wm.addParameter(_pWgD1);
+  _wm.addParameter(_pRelayPin);
+  _wm.addParameter(_pRelayAh);
+  _wm.addParameter(_pSensorPin);
+  _wm.addParameter(_pSensorCh);
 }
 
 // Re-fills the buffers WiFiManagerParameter points at (from current _cfg,
@@ -109,6 +133,12 @@ void NetworkManager::refreshParamBuffers() {
   snprintf(_bufPulse, sizeof(_bufPulse), "%u", _cfg.relayPulseMs ? _cfg.relayPulseMs : DEFAULT_RELAY_PULSE_MS);
   strncpy(_bufTz, _cfg.tz.length() ? _cfg.tz.c_str() : DEFAULT_TZ, sizeof(_bufTz));
   strncpy(_bufLabel, _cfg.doorLabel.c_str(), sizeof(_bufLabel));
+  snprintf(_bufWgD0, sizeof(_bufWgD0), "%d", _cfg.wiegandD0Pin);
+  snprintf(_bufWgD1, sizeof(_bufWgD1), "%d", _cfg.wiegandD1Pin);
+  snprintf(_bufRelayPin, sizeof(_bufRelayPin), "%d", _cfg.relayPin);
+  snprintf(_bufRelayAh, sizeof(_bufRelayAh), "%d", _cfg.relayActiveHigh ? 1 : 0);
+  snprintf(_bufSensorPin, sizeof(_bufSensorPin), "%d", _cfg.doorSensorPin);
+  snprintf(_bufSensorCh, sizeof(_bufSensorCh), "%d", _cfg.doorSensorClosedHigh ? 1 : 0);
 
   if (_pMode) {
     _pMode->setValue(_bufMode, sizeof(_bufMode));
@@ -118,6 +148,12 @@ void NetworkManager::refreshParamBuffers() {
     _pPulse->setValue(_bufPulse, sizeof(_bufPulse));
     _pTz->setValue(_bufTz, sizeof(_bufTz));
     _pLabel->setValue(_bufLabel, sizeof(_bufLabel));
+    _pWgD0->setValue(_bufWgD0, sizeof(_bufWgD0));
+    _pWgD1->setValue(_bufWgD1, sizeof(_bufWgD1));
+    _pRelayPin->setValue(_bufRelayPin, sizeof(_bufRelayPin));
+    _pRelayAh->setValue(_bufRelayAh, sizeof(_bufRelayAh));
+    _pSensorPin->setValue(_bufSensorPin, sizeof(_bufSensorPin));
+    _pSensorCh->setValue(_bufSensorCh, sizeof(_bufSensorCh));
   }
 }
 
@@ -131,6 +167,12 @@ void NetworkManager::applyParamsToConfig() {
   _cfg.relayPulseMs = atoi(_pPulse->getValue());
   _cfg.tz = String(_pTz->getValue());
   _cfg.doorLabel = String(_pLabel->getValue());
+  _cfg.wiegandD0Pin = (int8_t)atoi(_pWgD0->getValue());
+  _cfg.wiegandD1Pin = (int8_t)atoi(_pWgD1->getValue());
+  _cfg.relayPin = (int8_t)atoi(_pRelayPin->getValue());
+  _cfg.relayActiveHigh = atoi(_pRelayAh->getValue()) != 0;
+  _cfg.doorSensorPin = (int8_t)atoi(_pSensorPin->getValue());
+  _cfg.doorSensorClosedHigh = atoi(_pSensorCh->getValue()) != 0;
   if (_cfg.syncIntervalS < 10) _cfg.syncIntervalS = DEFAULT_SYNC_INTERVAL_S;
   if (_cfg.relayPulseMs < 100) _cfg.relayPulseMs = DEFAULT_RELAY_PULSE_MS;
   if (_cfg.tz.length() == 0) _cfg.tz = DEFAULT_TZ;
@@ -193,7 +235,7 @@ void NetworkManager::startWebConfigPortal() {
                 WiFi.localIP().toString().c_str());
 }
 
-// Same 7 fields as the WiFiManager form (minus WiFi SSID/password, which
+// Same fields as the WiFiManager form (minus WiFi SSID/password, which
 // don't apply in Ethernet mode), rendered by hand since there's no HTML
 // templating available here. Values come from the _bufXxx buffers that
 // refreshParamBuffers() already keeps in sync with _cfg for the WiFi path
@@ -218,6 +260,19 @@ String NetworkManager::ethConfigFormHtml() const {
   html += _bufTz;
   html += F("\"><br>Etiqueta del nodo: <input name=\"label\" value=\"");
   html += _bufLabel;
+  html += F("\"><br><br><b>Wiring</b><br>"
+             "Pin Wiegand D0: <input name=\"wg_d0\" size=\"4\" value=\"");
+  html += _bufWgD0;
+  html += F("\"><br>Pin Wiegand D1: <input name=\"wg_d1\" size=\"4\" value=\"");
+  html += _bufWgD1;
+  html += F("\"><br>Pin del rele: <input name=\"relay_pin\" size=\"4\" value=\"");
+  html += _bufRelayPin;
+  html += F("\"><br>Rele activo en HIGH? (1/0): <input name=\"relay_ah\" size=\"4\" value=\"");
+  html += _bufRelayAh;
+  html += F("\"><br>Pin sensor de puerta (-1=deshabilitado): <input name=\"sensor_pin\" size=\"4\" value=\"");
+  html += _bufSensorPin;
+  html += F("\"><br>Sensor cerrado=HIGH? (1/0): <input name=\"sensor_ch\" size=\"4\" value=\"");
+  html += _bufSensorCh;
   html += F("\"><br><br><button type=\"submit\">Guardar</button></form>"
              "<p>Cambiar el modo a 'wifi' aqui solo guarda esa preferencia — "
              "para meter el SSID/contrasena de la red sigue haciendo falta "
@@ -235,6 +290,12 @@ void NetworkManager::applyEthFormBody(const String &body) {
   _cfg.relayPulseMs = (uint32_t)formValue(body, "pulse_ms").toInt();
   _cfg.tz = formValue(body, "tz");
   _cfg.doorLabel = formValue(body, "label");
+  _cfg.wiegandD0Pin = (int8_t)formValue(body, "wg_d0").toInt();
+  _cfg.wiegandD1Pin = (int8_t)formValue(body, "wg_d1").toInt();
+  _cfg.relayPin = (int8_t)formValue(body, "relay_pin").toInt();
+  _cfg.relayActiveHigh = formValue(body, "relay_ah").toInt() != 0;
+  _cfg.doorSensorPin = (int8_t)formValue(body, "sensor_pin").toInt();
+  _cfg.doorSensorClosedHigh = formValue(body, "sensor_ch").toInt() != 0;
   if (_cfg.syncIntervalS < 10) _cfg.syncIntervalS = DEFAULT_SYNC_INTERVAL_S;
   if (_cfg.relayPulseMs < 100) _cfg.relayPulseMs = DEFAULT_RELAY_PULSE_MS;
   if (_cfg.tz.length() == 0) _cfg.tz = DEFAULT_TZ;

@@ -3,9 +3,10 @@
 
 // Debounced reader for an optional door-position reed switch. Entirely
 // inert (poll() always returns false, isOpen() always false) unless
-// begin() is called with a real pin — main.cpp only does that when
-// PIN_DOOR_SENSOR != -1 in config.h, so a node without the sensor wired
-// never touches this pin or reports anything about it.
+// begin() is called with a real pin — main.cpp only does that when the
+// configured sensor pin (RuntimeConfig::doorSensorPin, set via the config
+// portal) isn't -1, so a node without the sensor wired never touches this
+// pin or reports anything about it.
 class DoorSensor {
  public:
   void begin(int8_t pin, bool closedIsHigh, uint32_t debounceMs);

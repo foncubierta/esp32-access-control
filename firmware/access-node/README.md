@@ -35,45 +35,65 @@ ese momento, o prefieres hacerlo así):
 
 ## Wiring
 
+Los pines del lector Wiegand, del relé y del sensor de puerta (más abajo)
+**se configuran desde el propio portal** (AP, LAN vía WiFi, o el mini
+servidor en modo Ethernet — ver "Reconfigurar sin AP ni botón" más abajo),
+no hace falta recompilar para cambiarlos. Lo que hay en `config.h` son solo
+los valores de fábrica que salen precargados la primera vez que abres el
+portal.
+
 ### Lector Wiegand
 
-| Lector | ESP32 |
+| Lector | ESP32 (valor de fábrica) |
 |---|---|
-| D0 | GPIO 4 (`PIN_WIEGAND_D0`) |
-| D1 | GPIO 16 (`PIN_WIEGAND_D1`) |
+| D0 | GPIO 4 — campo "Pin Wiegand D0" en el portal |
+| D1 | GPIO 16 — campo "Pin Wiegand D1" en el portal |
 | GND | GND |
 | 12V / 5V | fuente externa del lector (no lo alimentes desde el ESP32) |
 
 D0/D1 son idle-high con pulsos a LOW — usa las resistencias pull-up que
 traiga el propio lector; si no las trae, añade 1kΩ–10kΩ a 3.3V (con
-level-shifting si el lector es de 5V/12V lógicos).
+level-shifting si el lector es de 5V/12V lógicos). A diferencia del sensor
+de puerta, el lector no tiene opción de "deshabilitado" — el pin debe ser
+un GPIO válido siempre.
 
 ### Relé (hacia la placa Aprimatic/BFT/...)
 
-| Relé | ESP32 |
+| Relé | ESP32 (valor de fábrica) |
 |---|---|
-| IN | GPIO 27 (`PIN_RELAY`) |
+| IN | GPIO 27 — campo "Pin del rele" en el portal |
 | VCC / GND | fuente 3.3V/5V según el módulo |
 
 El contacto NO del relé se cablea en paralelo al pulsador físico de
-START/PED de la placa de control. `RELAY_ACTIVE_HIGH` en `config.h` indica
-si tu módulo dispara con HIGH o LOW.
+START/PED de la placa de control. El campo "Rele activo en HIGH?" del
+portal indica si tu módulo dispara con HIGH (`1`) o LOW (`0`).
 
 ### Sensor de puerta (contacto magnético, opcional)
 
 | Sensor | ESP32 |
 |---|---|
-| Un terminal | GPIO configurable (`PIN_DOOR_SENSOR`, `-1` = deshabilitado) |
+| Un terminal | GPIO configurable — campo "Pin sensor de puerta" del portal (`-1` = deshabilitado, valor de fábrica) |
 | Otro terminal | GND |
 
 Sin resistencia externa — usa el pull-up interno. Deshabilitado por
-defecto (`PIN_DOOR_SENSOR -1`); asígnale un GPIO libre para activarlo. La
+defecto (`-1`); asígnale un GPIO libre desde el portal para activarlo. La
 mayoría de sensores de puerta llevan el imán en la hoja móvil y cierran el
 contacto cuando la puerta está cerrada, lo que deja el pin en LOW (cerrada)
-/ HIGH (abierta) con el pull-up interno — es el valor por defecto
-(`DOOR_SENSOR_CLOSED_HIGH false`). Si el tuyo está al revés, cambia ese
-flag. Ver la lógica de detección de "puerta forzada" vs "abierta demasiado
+/ HIGH (abierta) con el pull-up interno — es el valor de fábrica del campo
+"Sensor cerrado=HIGH?" (`0`). Si el tuyo está al revés, pon ese campo a `1`.
+Ver la lógica de detección de "puerta forzada" vs "abierta demasiado
 tiempo" en el README principal del proyecto, sección "Sensor de puerta".
+
+### Elegir los pines
+
+Evita los *strapping pins* (0, 2, 5, 12, 15) y los de UART0 (1, 3) para
+cualquiera de estos tres — GPIO 0 ya lo usa el botón de config. El
+firmware no valida que los pines que metas en el portal no choquen entre
+sí ni con los fijos (botón de config, LED de estado, SPI del W5500 en modo
+`eth`) — si te equivocas solo se rompe la función física afectada (lector,
+relé o sensor), nunca el acceso al portal en sí (usa pines distintos:
+botón de config, radio WiFi/Ethernet), así que siempre puedes volver a
+`http://<ip-del-nodo>/` y corregirlo.
 
 ### Ethernet (módulo W5500, opcional — solo si el nodo se configura en modo "eth")
 
@@ -93,8 +113,10 @@ tiempo" en el README principal del proyecto, sección "Sensor de puerta".
 | Botón de config (mantener 3s al arrancar) | GPIO 0 (botón BOOT de la mayoría de DevKits) |
 | LED de estado | GPIO 2 |
 
-Todos los pines son constantes en `include/config.h` — cámbialos si tu
-placa concreta los usa para otra cosa.
+Estos (Ethernet, botón de config, LED de estado) sí son constantes fijas en
+`include/config.h` — cámbialas ahí y recompila si tu placa concreta los usa
+para otra cosa. Wiegand, relé y sensor de puerta, en cambio, se configuran
+sin recompilar desde el portal (ver más arriba).
 
 ## Compilar y flashear
 

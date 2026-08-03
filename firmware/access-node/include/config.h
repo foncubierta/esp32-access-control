@@ -5,29 +5,40 @@
 // anything that must be stable at boot.
 
 // ---- Wiegand reader (D0/D1, idle-high, pulses LOW) ----
-#define PIN_WIEGAND_D0 4
-#define PIN_WIEGAND_D1 16
+// These are only the *first-boot* defaults, pre-filled into the config
+// portal (AP, LAN web portal, or the Ethernet mini server) — the pins
+// actually in use live in RuntimeConfig (NVS), configurable from any of
+// those without recompiling. Both must be real, distinct GPIOs; unlike the
+// door sensor below there's no "disabled" option for the reader.
+#define DEFAULT_PIN_WIEGAND_D0 4
+#define DEFAULT_PIN_WIEGAND_D1 16
 
 // Optional feedback lines toward the reader — most readers work fine
-// without them. Set to -1 to leave disconnected/unused.
+// without them. Not wired to anything in the firmware yet (no code drives
+// them), left here as a reminder of which pins are free if that's added
+// later. Set to -1 to leave disconnected/unused.
 #define PIN_READER_LED -1     // usually active LOW
 #define PIN_READER_BUZZER -1  // usually active LOW pulse = beep
 
 // ---- Relay driving the gate controller's START/PED dry contact input ----
-#define PIN_RELAY 27
-#define RELAY_ACTIVE_HIGH true  // flip to false if your relay module triggers on LOW
+// Same deal as Wiegand above: first-boot defaults only, actual pin/polarity
+// come from RuntimeConfig via the config portal.
+#define DEFAULT_PIN_RELAY 27
+#define DEFAULT_RELAY_ACTIVE_HIGH true  // flip if your relay module triggers on LOW
 
 // ---- Door position sensor (reed switch on the door/gate leaf) — optional.
-//      Set PIN_DOOR_SENSOR to -1 (default) to leave this feature off
-//      entirely; the node then never touches this pin or the /sensor
-//      endpoint. Wire the switch between the pin and GND and leave the
-//      internal pull-up doing the rest (no external resistor needed). Most
-//      door reed switches are wired so the magnet (on the moving leaf)
-//      keeps the contacts closed when the door is shut — that shorts the
-//      pin to GND, i.e. LOW = closed, HIGH = open. Flip the flag below if
-//      yours is wired the other way round. ----
-#define PIN_DOOR_SENSOR -1
-#define DOOR_SENSOR_CLOSED_HIGH false  // false (default/typical): LOW = closed, HIGH = open. true: the reverse.
+//      Configured from the same config portal as everything else here —
+//      leave the pin at -1 (default) there to keep this feature off
+//      entirely; the node then never touches any pin for it nor the
+//      /sensor endpoint. Wire the switch between the pin and GND and leave
+//      the internal pull-up doing the rest (no external resistor needed).
+//      Most door reed switches are wired so the magnet (on the moving
+//      leaf) keeps the contacts closed when the door is shut — that
+//      shorts the pin to GND, i.e. LOW = closed, HIGH = open; flip the
+//      polarity field in the portal if yours is wired the other way
+//      round. ----
+#define DEFAULT_PIN_DOOR_SENSOR -1
+#define DEFAULT_DOOR_SENSOR_CLOSED_HIGH false
 #define DOOR_SENSOR_DEBOUNCE_MS 100    // pin must read the same value for this long before a transition is accepted — filters contact bounce/EMI, not meant to filter out a real slow-swinging door
 // How long after a granted access (card or manual trigger actually fired
 // the relay) the door is allowed to open before it's no longer considered

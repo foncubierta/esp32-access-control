@@ -15,6 +15,16 @@ struct RuntimeConfig {
   String tz;
   String doorLabel;
 
+  // Wiring — configurable from the same config portal as everything else
+  // above (see NetworkManager's params), persisted in NVS. Defaults come
+  // from config.h and only matter before the portal has ever been saved.
+  int8_t wiegandD0Pin = -1;
+  int8_t wiegandD1Pin = -1;
+  int8_t relayPin = -1;
+  bool relayActiveHigh = true;
+  int8_t doorSensorPin = -1;  // -1 = disabled, same convention as before
+  bool doorSensorClosedHigh = false;
+
   bool isValid() const { return backendUrl.length() > 0 && apiKey.length() > 0; }
 };
 
@@ -54,6 +64,12 @@ private:
   char _bufPulse[8];
   char _bufTz[64];
   char _bufLabel[40];
+  char _bufWgD0[4];
+  char _bufWgD1[4];
+  char _bufRelayPin[4];
+  char _bufRelayAh[4];
+  char _bufSensorPin[4];
+  char _bufSensorCh[4];
   WiFiManagerParameter *_pMode = nullptr;
   WiFiManagerParameter *_pBackend = nullptr;
   WiFiManagerParameter *_pApiKey = nullptr;
@@ -61,6 +77,12 @@ private:
   WiFiManagerParameter *_pPulse = nullptr;
   WiFiManagerParameter *_pTz = nullptr;
   WiFiManagerParameter *_pLabel = nullptr;
+  WiFiManagerParameter *_pWgD0 = nullptr;
+  WiFiManagerParameter *_pWgD1 = nullptr;
+  WiFiManagerParameter *_pRelayPin = nullptr;
+  WiFiManagerParameter *_pRelayAh = nullptr;
+  WiFiManagerParameter *_pSensorPin = nullptr;
+  WiFiManagerParameter *_pSensorCh = nullptr;
 
   bool _webPortalActive = false;
   bool _pendingRestart = false;
