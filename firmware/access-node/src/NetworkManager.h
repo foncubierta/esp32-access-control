@@ -47,10 +47,13 @@ struct RuntimeConfig {
 // Owns node configuration (persisted in NVS) and whichever transport
 // (WiFi STA or a W5500 Ethernet module) the node was configured to use.
 // First boot — or holding the config button — launches a blocking
-// WiFiManager captive portal (its own AP) to collect everything, then
-// reboots into normal operation. Once connected, the exact same set of
-// fields is also reachable on the LAN at the node's own IP with no AP and
-// no button: startWebConfigPortal() over WiFi (WiFiManager's own
+// WiFiManager captive portal (its own AP). Its menu keeps "Configure WiFi"
+// (SSID/password only) and everything else (backend URL, API key, wiring
+// pins...) as two genuinely separate pages — see setupParams()'s
+// setParamsPage(true)/setCustomMenuHTML() — so the WiFi connect step never
+// depends on any of our own fields being filled in. Once connected, the
+// exact same menu is also reachable on the LAN at the node's own IP with
+// no AP and no button: startWebConfigPortal() over WiFi (WiFiManager's own
 // non-blocking web portal), startEthConfigServer() over Ethernet (a small
 // hand-rolled HTTP server — WiFiManager can't serve over the W5500, see
 // the comment on that method).

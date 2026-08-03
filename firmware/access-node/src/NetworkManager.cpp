@@ -91,9 +91,21 @@ void NetworkManager::saveConfig() {
 void NetworkManager::setupParams() {
   refreshParamBuffers();
 
+  // Keeps all of our custom fields off the "Configure WiFi" page entirely
+  // — they only render on WiFiManager's separate params-only page (served
+  // at /param, its own menu entry). Two reasons: it's what makes "just the
+  // WiFi, nothing else required" actually true — the /wifisave POST that
+  // connects to WiFi no longer carries any of our fields at all, so there
+  // is structurally nothing about them (blank API key included) that can
+  // affect whether that connect succeeds — and it's the "own button,
+  // separate from Configure WiFi" the field list was asked to move behind.
+  _wm.setParamsPage(true);
+  _wm.setCustomMenuHTML("<a href='/param'><button>Configuracion</button></a><br/>");
+
   _pHeaderNet = new WiFiManagerParameter(
-      "<h3>Red y puerta</h3><p>Solo el WiFi de arriba hace falta ahora mismo — el resto se puede "
-      "dejar en blanco/por defecto y terminarlo luego desde <code>http://&lt;ip-del-nodo&gt;/</code>.</p>");
+      "<h3>Red y puerta</h3><p>Ya deberias tener el WiFi configurado (boton "
+      "\"Configure WiFi\") — esto es todo lo demas, se puede dejar en blanco/por "
+      "defecto y terminarlo luego desde <code>http://&lt;ip-del-nodo&gt;/param</code>.</p>");
   _pMode = new WiFiManagerParameter("conn_mode", "Modo: 'wifi' o 'eth' (modulo W5500)", _bufMode, sizeof(_bufMode));
   _pBackend = new WiFiManagerParameter("backend_url", "URL del backend (http://host:8010)", _bufBackend, sizeof(_bufBackend));
   _pApiKey = new WiFiManagerParameter("api_key", "API key de esta puerta", _bufApiKey, sizeof(_bufApiKey));
@@ -184,12 +196,15 @@ void NetworkManager::applyParamsToConfig() {
   if (_cfg.tz.length() == 0) _cfg.tz = DEFAULT_TZ;
 }
 
-// Fired by WiFiManager from inside the web server's request handler when
-// the form is submitted — whether that's the LAN portal's "Setup" page
-// (params only, no WiFi credentials touched — triggers setSaveParamsCallback)
-// or its "Configure WiFi" page (SSID/password + our params together, same
-// as the AP flow — triggers setSaveConfigCallback). Both are wired to this
-// same handler so either path saves correctly. Restarting here directly
+// Fired by WiFiManager from inside the web server's request handler when a
+// form is submitted — either the separate "Configuracion" (params-only,
+// /param) page, which triggers setSaveParamsCallback, or "Configure WiFi"
+// (SSID/password only now — see setupParams()'s setParamsPage(true)),
+// which triggers setSaveConfigCallback. Both are wired to this same
+// handler: saving either one persists whatever RuntimeConfig currently
+// holds (loaded fresh + any params-page edits already applied to _cfg via
+// applyParamsToConfig() below), so a plain WiFi-only save from this page
+// doesn't clobber previously-set app config. Restarting here directly
 // would cut off the "saved" response mid-flight, so this only applies and
 // persists the config, then arms a short delayed restart that loop() acts
 // on once the response has had time to reach the browser.
@@ -215,6 +230,10 @@ void NetworkManager::runConfigPortal() {
   // In WiFi mode this also collects and saves the STA SSID/password (via
   // WiFiManager's normal flow) which the ESP32 WiFi stack then persists on
   // its own. In Ethernet mode those credentials are simply left unused.
+  // Blocks until that succeeds — and, thanks to setParamsPage(true) in
+  // setupParams(), the "Configure WiFi" page carries nothing but SSID/
+  // password, so nothing about our own fields (a blank API key included)
+  // can affect whether or when this returns.
   _wm.startConfigPortal(AP_PORTAL_NAME);
 
   applyParamsToConfig();
@@ -226,9 +245,10 @@ void NetworkManager::runConfigPortal() {
 
 // Non-blocking counterpart to runConfigPortal(): once the node already has
 // a WiFi (STA) connection, this starts the same WiFiManager web server —
-// same "Configure WiFi" + custom-params pages — bound to the node's normal
-// LAN IP instead of bringing up an AP. No button, no reboot to reach it;
-// changes made here are picked up via onParamsSaved() above.
+// same menu ("Configure WiFi" + the separate "Configuracion"/param page) —
+// bound to the node's normal LAN IP instead of bringing up an AP. No
+// button, no reboot to reach it; changes made here are picked up via
+// onParamsSaved() above.
 void NetworkManager::startWebConfigPortal() {
   if (!ENABLE_LAN_CONFIG_PORTAL) return;
 

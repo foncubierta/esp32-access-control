@@ -147,23 +147,26 @@ mantienes el botón de config 3s al arrancar), levanta su propia red
 `AccessNode-Setup`:
 
 1. Conéctate a esa red desde el móvil/portátil.
-2. Se abrirá el portal (o entra a `http://192.168.4.1`).
-3. Elige tu WiFi habitual y su contraseña (se usan solo si el modo de
-   conexión es "wifi" — en modo "eth" ese paso se guarda pero no se usa; en
-   ese modo el nodo ni siquiera pasa por aquí en el primer arranque, ver
-   más abajo).
-4. Verás también los campos de la sección **"Red y puerta"** (modo, URL del
-   backend, API key, intervalo de sync, pulso del relé, TZ, etiqueta) y
-   **"Cableado"** (pines de Wiegand/relé/sensor) — **puedes dejarlos todos
-   en blanco o con su valor por defecto**. No hace falta rellenarlos aquí.
-5. Guarda — el nodo reinicia, se conecta al WiFi que le diste y arranca en
-   modo normal (aunque el resto de la config esté vacía: sin API key
-   simplemente no podrá hablar con el backend todavía).
-6. Termina la configuración (API key, backend, pines...) desde el propio
-   navegador, ya conectado a esa WiFi — ver "Reconfigurar sin AP ni botón"
-   más abajo. Es el flujo recomendado: manejar el móvil/portátil metido en
-   una red WiFi ajena (la del AP) solo para lo justo, y el resto ya desde tu
-   red normal.
+2. Se abrirá el portal (o entra a `http://192.168.4.1`) — verás el menú
+   principal de WiFiManager con dos botones que van a páginas totalmente
+   separadas: **"Configure WiFi"** y **"Configuracion"**.
+3. Pulsa **"Configure WiFi"**: elige tu red habitual y su contraseña (se
+   usan solo si el modo de conexión es "wifi" — en modo "eth" ese paso se
+   guarda pero no se usa; en ese modo el nodo ni siquiera pasa por aquí en
+   el primer arranque, ver más abajo). **Esta página ya no lleva ningún
+   otro campo** — nada de lo demás puede interferir con que el WiFi
+   conecte.
+4. Guarda — el nodo reinicia, se conecta al WiFi que le diste y arranca en
+   modo normal (aunque el resto de la config esté vacío: sin API key
+   simplemente no podrá hablar con el backend todavía, pero eso no le
+   impide conectarse a tu red).
+5. El botón **"Configuracion"** (campos "Red y puerta": modo, URL del
+   backend, API key, intervalo de sync, pulso del relé, TZ, etiqueta; y
+   "Cableado": pines de Wiegand/relé/sensor) puedes dejarlo sin tocar aquí
+   y rellenarlo después desde el navegador, ya conectado a esa WiFi — ver
+   "Reconfigurar sin AP ni botón" más abajo. Es el flujo recomendado:
+   manejar el móvil/portátil metido en una red WiFi ajena (la del AP) solo
+   para lo justo, y el resto ya desde tu red normal.
 
 Un nodo en modo `eth` no necesita pasar por el AP en absoluto la primera
 vez — Ethernet no lleva credenciales, así que arranca directo, y toda la
@@ -185,12 +188,13 @@ conectarte a ningún AP ni tocar el botón de config:
    `[net] LAN config portal available at http://...`).
 2. Abre `http://<ip-del-nodo>/` desde cualquier equipo de esa misma red.
 3. En modo `wifi` verás el mismo menú de WiFiManager que en el AP —
-   "Configure WiFi" (para cambiar de red) o el formulario de parámetros,
-   agrupado en dos secciones: **"Red y puerta"** (modo, backend, API key,
-   sync, pulso del relé, TZ, etiqueta) y **"Cableado"** (pines de
-   Wiegand/relé/sensor). En modo `eth` verás una página más simple con
-   esos mismos campos (sin WiFi, claro) — está servida por un mini
-   servidor HTTP propio, no por WiFiManager (ver nota técnica más abajo).
+   "Configure WiFi" (para cambiar de red, página aparte) y "Configuracion"
+   (todo lo demás, agrupado en dos secciones: **"Red y puerta"** — modo,
+   backend, API key, sync, pulso del relé, TZ, etiqueta — y **"Cableado"**
+   — pines de Wiegand/relé/sensor). En modo `eth` verás una única página
+   más simple con todos esos campos juntos (no hay WiFi que separar) —
+   está servida por un mini servidor HTTP propio, no por WiFiManager (ver
+   nota técnica más abajo).
 4. Al guardar, el nodo aplica y persiste los cambios y reinicia solo a los
    pocos segundos.
 
